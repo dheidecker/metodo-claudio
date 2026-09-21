@@ -8,11 +8,11 @@ va en el `CLAUDE.md` de su carpeta.
 Verificado contra la máquina el 2026-09-21.
 
 > **Dónde vive de verdad este archivo.** El canónico es
-> `~/Proyectos/agent-observer/EQUIPOS.md`, versionado en
-> <https://github.com/dheidecker/observador>. `~/Proyectos/CLAUDE.md` es un
-> enlace simbólico a él, para que quede respaldado y con historia en vez de
-> existir solo en el disco. Comprobado que una sesión nueva lo carga a través
-> del enlace. Contra: si se borra `agent-observer/`, el enlace queda colgando
+> `~/Proyectos/forma-de-trabajo/EQUIPOS.md`, en un repo que solo contiene la
+> forma de trabajar (antes estaba en `agent-observer`, el repo de una
+> herramienta que ya no se usa; se mudó el 2026-09-21). `~/Proyectos/CLAUDE.md`
+> es un enlace simbólico a él. Comprobado que una sesión nueva lo carga a través
+> del enlace. Contra: si se borra `forma-de-trabajo/`, el enlace queda colgando
 > y las sesiones dejan de recibir esto **sin avisar**. Edítalo aquí, no en el
 > enlace.
 
