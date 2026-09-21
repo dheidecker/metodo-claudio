@@ -107,39 +107,27 @@ Si un chat necesita nombre reconocible, la convención sigue siendo
 `<Equipo> - <Rol>`, porque el nombre derivado (`tickets-8c`, `sempat-40`) no
 dice nada.
 
-## 5. Revivir agentes: ahora es rescate, no rutina
+## 5. Chats cerrados: no se reviven
 
-**El 2026-09-21 Derek desinstaló el guardián** (`equipo guardia desinstalar`) y
-dejó de mantener un plantel de chats de larga vida. Con eso, revivir dejó de
-ser parte del flujo.
+Un chat cerrado se queda cerrado. Si hace falta continuidad, está en los
+archivos de §3; si hace falta trabajo, se abre un chat nuevo o se lanza un
+subagente. **No revivas a nadie por costumbre** — esto deroga la instrucción
+del 2026-09-04 («levantar no se pregunta, se hace»), que valía cuando el
+trabajo dependía de un plantel de chats vivos. Desde el 2026-09-21 no depende.
 
-Esto **deroga** la instrucción del 2026-09-04 —«dejen de preguntarme si quiero
-levantarlo, sí siempre que sea necesario y automático»—, que valía cuando el
-trabajo dependía de un plantel vivo. Ya no depende.
+> Esto se aprendió rompiéndolo: un latido que levantaba a **todos** los caídos
+> cada minuto resucitó equipos que Derek había cerrado horas antes. Su reacción
+> fue «hay algún comportamiento raro, estábamos bien». La lección sobrevive al
+> sistema que la produjo: **no actúes en masa sobre lo que el usuario cerró a
+> propósito.** Un chat cerrado, un servicio apagado o un agente dormido suelen
+> ser una decisión suya, no un fallo que arreglarle.
 
-Hoy: **no revivas a nadie por costumbre.** Si de verdad hace falta un chat
-concreto, la herramienta sigue ahí y sigue sin necesitar permiso:
+**Si en esta máquina existe la herramienta `agent-observer`** (no viene con
+este repo), `EQUIPOS.md` §3 explica cómo levantar un chat concreto como rescate
+puntual. Si no existe, no hay nada que hacer aquí.
 
-```bash
-~/Proyectos/agent-observer/equipo estado "<Equipo> - <Rol>"   # 0 vive, 1 caído
-~/Proyectos/agent-observer/equipo revivir "<Equipo> - <Rol>"
-~/Proyectos/agent-observer/equipo direccion "<Equipo> - <Rol>"  # cambia al revivir
-```
-
-Un revivido **no tiene las herramientas que sirve la aplicación** (nada de
-`claude-in-chrome`, `Claude_Browser`, `ccd_session*`). Un subagente **sí las
-hereda** —medido el 2026-09-21—, así que para trabajo de navegador con la
-sesión de Derek iniciada, subagente, no revivido.
-
-> Esto se aprendió rompiéndolo, y conviene recordarlo: un latido que levantaba
-> a **todos** los caídos cada minuto resucitó equipos que Derek había cerrado
-> horas antes. Su reacción fue «hay algún comportamiento raro, estábamos bien».
-> La lección sobrevive al sistema que la produjo: **no actúes en masa sobre
-> lo que Derek cerró a propósito.** Un chat cerrado, un servicio apagado o un
-> agente dormido suelen ser una decisión suya, no un fallo que arreglarle.
-
-**Lo único que el nativo no hace: trabajar con el chat cerrado.** Los
-subagentes mueren con su sesión. Para eso están las tareas programadas.
+**Lo único que un subagente no hace: trabajar con el chat cerrado.** Muere con
+su sesión. Para eso están las tareas programadas.
 
 ## 6. Lo que sigue necesitando su autorización
 

@@ -64,6 +64,10 @@ vieja falla igual.
 
 ## 3. Pasar lista y revivir: ahora es rescate, no rutina
 
+> **Requiere la herramienta `agent-observer`** (<https://github.com/dheidecker/observador>),
+> que **no** viene con este repo y ya no forma parte del flujo normal. Si no
+> está instalada en esta máquina, sáltate esta sección entera.
+
 **El 2026-09-21 Derek desinstaló el guardián y dejó de mantener un plantel de
 chats de larga vida.** El trabajo pasó a **subagentes efímeros**: nacen dentro
 de la sesión del orquestador, trabajan y mueren. El detalle del modo de trabajo
@@ -147,6 +151,10 @@ quedas con dos procesos pisándose el transcript, y el síntoma no es un error: 
 una conversación que se corrompe sola.
 
 ## 4. Ver qué está haciendo el equipo
+
+> **Requiere la herramienta `agent-observer`** (<https://github.com/dheidecker/observador>),
+> que **no** viene con este repo y ya no forma parte del flujo normal. Si no
+> está instalada en esta máquina, sáltate esta sección entera.
 
 ```bash
 ~/Proyectos/agent-observer/observador estado       # → http://localhost:8787
