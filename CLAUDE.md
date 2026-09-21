@@ -16,6 +16,11 @@ tarea es **dejarlo donde Claude Code lo lee**.
 3. En ese chat nuevo, el usuario puede comprobar que llegó con el prompt de
    calibración de `METODOLOGIA.md` §6.
 
+## Si el usuario quiere quitarlo
+
+Corre `./desinstalar.sh`. Deshace solo lo que hizo el instalador y conserva las
+reglas propias del usuario. Dile que abra un chat nuevo.
+
 ## Qué NO hacer
 
 - No copies el contenido a `~/.claude/CLAUDE.md`: **enlaza**. Una copia deja de

@@ -48,6 +48,16 @@ En el chat nuevo, pega el prompt de calibración de `METODOLOGIA.md` §6. Si
 responde «subagentes efímeros, `Explore` para leer, roles del proyecto, nada de
 push ni despliegues sin tu OK», está instalado.
 
+## Quitar
+
+```bash
+~/Proyectos/forma-de-trabajo/desinstalar.sh
+```
+
+Deshace exactamente lo que hizo el instalador: quita el enlace, o quita solo
+la línea de importación dejando tus reglas intactas. Los respaldos se quedan.
+Idempotente. Después, chat nuevo.
+
 ## Editar
 
 Edita `METODOLOGIA.md` **aquí** y commitea. Un `git pull` en cada máquina
