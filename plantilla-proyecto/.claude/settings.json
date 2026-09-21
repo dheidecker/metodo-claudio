@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-marca.sh", "timeout": 5 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write", "hooks": [
+        { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/lint-editado.sh", "timeout": 30, "statusMessage": "php -l / node --check…" },
+        { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/blade-trampas.sh", "timeout": 15 }
+      ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-lint.sh", "timeout": 60, "statusMessage": "Comprobando lo cambiado antes de terminar…" } ] }
+    ]
+  }
+}

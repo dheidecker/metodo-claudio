@@ -43,12 +43,12 @@ tres archivos cuesta más de lo que ahorra.
   (por ejemplo `desarrollador`, `qa`, `disenador`), con sus límites escritos.
   Si un proyecto no tiene roles, usa `general-purpose` y crea el rol cuando el
   trabajo se repita.
-- **Una coreografía de varios subagentes que se repite** (por cada archivo:
-  arreglar → verificar → juntar): un **Workflow**, guardado en
-  `<proyecto>/.claude/workflows/`. Es de segundo escalón: cada agente arranca
-  con su piso de ~30.000 tokens, así que para una tarea suelta va un subagente
-  y para la misma tarea repetida cincuenta veces, un workflow. Se escribe
-  cuando aparece el caso real, no antes.
+- **El mismo cambio en muchos archivos** (cincuenta vistas, una migración
+  mecánica): primero **`/batch <instrucción>`**, que reparte el trabajo entre
+  5–30 subagentes, cada uno en su worktree con su PR. Si no encaja, un
+  **Workflow** en `<proyecto>/.claude/workflows/`. Ambos son de segundo escalón:
+  cada agente arranca con su piso de ~30.000 tokens. Para una tarea suelta, un
+  subagente; para la misma repetida cincuenta veces, `/batch`.
 - Todo rol lleva **`memory: project`** en el frontmatter. Sin ese campo no tiene
   memoria propia; con él, escribe solo en `.claude/agent-memory/<rol>/`.
 
@@ -85,6 +85,19 @@ turno con «esperando a los agentes». Si lanzaste subagentes, esperas, integras
 y devuelves — lanzar y olvidar deja resultados huérfanos que nadie recoge.
 Descompón solo si el trabajo no cabe en un contexto: la profundidad es una
 consecuencia, no un plan.
+
+**Antes de dar por terminado un cambio grande, que lo revise alguien que no lo
+escribió.** Un subagente fresco ve solo el diff y el encargo, no el razonamiento
+que lo produjo, así que no está sesgado a favor. Para bugs, `/code-review`
+(incorporado). Para «¿cumple lo pedido?», el encargo lo escribes tú:
+
+> Revisa el diff contra el encargo. Comprueba que cada requisito está
+> implementado, que los casos listados tienen prueba, y que nada fuera del
+> alcance cambió. Reporta **solo** huecos que afecten a la corrección o a lo
+> pedido, no preferencias de estilo.
+
+Esa última frase importa: un revisor al que le piden huecos siempre encuentra
+alguno. El contrato de salida también aplica al revisor.
 
 Resumen: **contexto denso hacia adentro, informe delgado hacia afuera.** Paga
 generoso al encargar y sé tacaño al recibir.
@@ -154,6 +167,11 @@ archivos; si hace falta trabajo, se abre un chat nuevo o se lanza un
 subagente. No resucites chats por costumbre, y **no actúes en masa sobre lo que
 el usuario cerró a propósito**: un chat cerrado o un servicio apagado suelen ser
 una decisión suya, no un fallo que arreglarle.
+
+**Para lo que dejes corriendo sin mirar, fija la condición de éxito con
+`/goal`.** Un evaluador aparte la re-comprueba tras cada turno y el chat sigue
+hasta cumplirla o atascarse — y entonces se detiene con aviso, no en bucle. Es
+el escalón entre «pídelo en el prompt» y «un hook `Stop` que bloquea».
 
 **Tres hábitos de contexto, baratos:** `/clear` entre tareas que no tienen que
 ver — una sesión con contexto ajeno rinde peor que una limpia con mejor prompt.
@@ -231,7 +249,12 @@ prueba, no un ritual: en el día a día basta la presentación de arriba.
 Si contesta bien, dale la tarea. Si contesta mal, **el fallo está en un
 archivo, no en el chat**: se arregla ahí, una vez, para todos los que vengan.
 
-Para un **proyecto nuevo**, el primer encargo es construir lo que falta:
+Para un **proyecto nuevo**, copia primero `plantilla-proyecto/.claude/` de este
+repo a la raíz del proyecto: trae los hooks que imponen «antes de dar por
+terminado» (`php -l` en el turno, linter de trampas, puerta `Stop` sobre lo
+cambiado en la sesión) y un rol `desarrollador` genérico para especializar. Los
+hooks usan `CLAUDE_PROJECT_DIR`, así que no llevan ninguna ruta escrita. Después,
+para un **proyecto nuevo**, el primer encargo es construir lo que falta:
 explorar el repositorio delegando en `Explore`, escribir el `CLAUDE.md` del
 proyecto con solo lo verificado, y proponer —no crear— los roles que va a
 necesitar.

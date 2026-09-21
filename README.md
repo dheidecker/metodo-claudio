@@ -89,6 +89,19 @@ Si ya tenías hooks `PreCompact`/`PostCompact`, este comando los reemplaza por
 los del repo: fusiónalos a mano en ese caso. Después, chat nuevo. Para
 probarlo, `/compact` en un chat y mira el directorio.
 
+## Plantilla para un proyecto nuevo
+
+```bash
+cp -r ~/Proyectos/forma-de-trabajo/plantilla-proyecto/.claude  <proyecto>/
+```
+
+Trae `settings.json` con tres hooks —`php -l`/`node --check` tras cada edición,
+linter de trampas Blade/migraciones que avisa, y una puerta `Stop` que bloquea
+si `php -l` falla en lo cambiado durante la sesión— y un rol `desarrollador`
+genérico con `memory: project`. Todo relativo a `CLAUDE_PROJECT_DIR`: sin rutas
+escritas. Especialízalo con las trampas del proyecto; los hooks de PHP/Blade
+sobran si el proyecto no es PHP — bórralos del `settings.json`.
+
 ## Comprobar que llegó
 
 En el chat nuevo, pega el prompt de calibración de `METODOLOGIA.md` §6. Si
