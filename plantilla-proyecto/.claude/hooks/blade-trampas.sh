@@ -12,7 +12,7 @@ avisos=()
 # Archivo sin seguimiento o fuera de un repo -> se mira entero.
 cambiadas=""
 if git -C "$(dirname "$f")" rev-parse --is-inside-work-tree >/dev/null 2>&1 && git -C "$(dirname "$f")" ls-files --error-unmatch "$f" >/dev/null 2>&1; then
-  cambiadas="$(git -C "$(dirname "$f")" diff -U0 HEAD -- "$f" 2>/dev/null | grep -oE '^\+\+?[0-9]+(,[0-9]+)?' | grep -oE '^\+[0-9]+(,[0-9]+)?' | sed 's/^+//' | while IFS=, read -r a b; do b=${b:-1}; [ "$b" -eq 0 ] && continue; seq "$a" $((a+b-1)); done | tr '\n' ' ')"
+  cambiadas="$(git -C "$(dirname "$f")" diff -U0 HEAD -- "$f" 2>/dev/null | grep -oE '^@@ -[0-9]+(,[0-9]+)? \+[0-9]+(,[0-9]+)? @@' | grep -oE '\+[0-9]+(,[0-9]+)?' | sed 's/^+//' | while IFS=, read -r a b; do b=${b:-1}; [ "$b" -eq 0 ] && continue; seq "$a" $((a+b-1)); done | tr '\n' ' ')"
   [ -z "$cambiadas" ] && cambiadas="ninguna"
 fi
 solo_cambiadas() { # filtra una lista "1,5,9" dejando las que están en $cambiadas
