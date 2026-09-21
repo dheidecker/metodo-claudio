@@ -102,6 +102,14 @@ genérico con `memory: project`. Todo relativo a `CLAUDE_PROJECT_DIR`: sin rutas
 escritas. Especialízalo con las trampas del proyecto; los hooks de PHP/Blade
 sobran si el proyecto no es PHP — bórralos del `settings.json`.
 
+## La statusline es solo para la terminal
+
+`hooks/statusline.sh` dibuja el % de contexto con semáforo bajo el prompt del
+**CLI** (`claude` en una terminal). **En Claude Desktop no se muestra**: la app
+trae su propio indicador — «Ventana de contexto N / 1M (x%)» en el desglose de
+uso, arriba a la derecha — que cubre lo mismo. Si solo usas Desktop, puedes
+quitar `statusLine` del snippet antes de aplicarlo; no hace daño dejarlo.
+
 ## Comprobar que llegó
 
 En el chat nuevo, pega el prompt de calibración de `METODOLOGIA.md` §6. Si
