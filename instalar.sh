@@ -49,6 +49,15 @@ if [ -L "$VIEJO_P" ] && [[ "$(readlink "$VIEJO_P")" == "$AQUI/"* ]] && [ ! -e "$
 fi
 
 echo "  verificado:     $(grep -c 'Metodología de trabajo con Claude Code' "$ORIGEN") archivo, legible"
+# El snippet de hooks lleva la ruta real de este clon, sea cual sea.
+sed "s#~/Proyectos/forma-de-trabajo#$AQUI#g" "$AQUI/hooks/settings-hooks.json" > "$AQUI/hooks/settings-hooks.local.json"
+echo "  hooks:          hooks/settings-hooks.local.json generado con la ruta de este clon"
+
 echo
 echo "Listo. Abre un chat NUEVO de Claude Code: los CLAUDE.md se leen al arrancar."
 echo "En el chat nuevo, Claude se presenta solo en tres líneas. Si no lo hace, mira $DESTINO."
+
+echo
+echo "Opcional, lo aplicas tú (Claude no puede tocar tu settings.json):"
+echo "  guardarraíles + hook de compactación, en un solo paso:"
+echo "  jq -s '.[0] * .[1] * {permissions: {deny: ((.[0].permissions.deny // []) + .[2].permissions.deny | unique), ask: ((.[0].permissions.ask // []) + .[2].permissions.ask | unique)}}' ~/.claude/settings.json $AQUI/hooks/settings-hooks.local.json $AQUI/guardarrailes.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json"

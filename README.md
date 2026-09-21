@@ -61,7 +61,8 @@ Ajusta las reglas a tu stack antes de aplicarlas: las de `php artisan` y
 
 ## Punto de guardado al compactar (opcional)
 
-`hooks/compactacion.sh` se engancha a `PreCompact` y `PostCompact`: antes de
+`hooks/compactacion.sh` se engancha a `PreCompact` y `PostCompact` (el
+`instalar.sh` genera `hooks/settings-hooks.local.json` con la ruta real del clon): antes de
 compactar anota archivos tocados y últimas peticiones; después guarda el
 resumen. Un archivo por compactación en
 `~/.claude/projects/<proyecto>/compactaciones/`. Solo necesita `jq`; nunca
@@ -69,7 +70,7 @@ bloquea. Como los guardarraíles, **lo aplicas tú**:
 
 ```bash
 cd ~/Proyectos/forma-de-trabajo
-jq -s '.[0] * .[1]' ~/.claude/settings.json hooks/settings-hooks.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json
+jq -s '.[0] * .[1]' ~/.claude/settings.json hooks/settings-hooks.local.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json
 ```
 
 Si ya tenías hooks `PreCompact`/`PostCompact`, este comando los reemplaza por
