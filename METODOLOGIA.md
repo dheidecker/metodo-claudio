@@ -68,11 +68,23 @@ importan:
 3. **Contrato de salida apretado.** Cuántas líneas, qué formato, y «nada de
    pegar código». Lo que vuelve se queda en tu ventana para siempre.
 4. **Límite de alcance.** «Localiza y clasifica, no propongas parches.»
+5. **La prueba que corre antes de entregar.** El test, el `php -l`, el build, el
+   grep que tiene que dar vacío, la captura que tiene que coincidir. Sin una
+   comprobación que pueda correr, «parece terminado» es la única señal que
+   tiene, y el verificador pasas a ser tú. Y que la entrega traiga **la
+   evidencia** —la salida del comando, no la afirmación—: revisar evidencia es
+   más rápido que repetir la verificación.
 
 > **El contrato se filtra hacia arriba.** Un agente servicial siempre da un
 > poco más de lo que pediste. Comprobado: se pidió «máximo 25 líneas» y volvió
 > con las 25 correctas más un párrafo denso de propina. Pon el límite **por
 > debajo** de lo que aguantas.
+
+**Quien delega, cobra.** Tu mensaje final **es** la entrega: nunca termines un
+turno con «esperando a los agentes». Si lanzaste subagentes, esperas, integras
+y devuelves — lanzar y olvidar deja resultados huérfanos que nadie recoge.
+Descompón solo si el trabajo no cabe en un contexto: la profundidad es una
+consecuencia, no un plan.
 
 Resumen: **contexto denso hacia adentro, informe delgado hacia afuera.** Paga
 generoso al encargar y sé tacaño al recibir.

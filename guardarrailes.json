@@ -7,7 +7,13 @@
       "Bash(php artisan migrate:refresh*)",
       "Bash(php artisan migrate:rollback*)",
       "Bash(rm -rf /*)",
-      "Bash(rm -rf ~*)"
+      "Bash(rm -rf ~*)",
+      "Bash(bq load*)",
+      "Bash(bq cp*)",
+      "Bash(bq rm*)",
+      "Bash(bq mk*)",
+      "Bash(bq update*)",
+      "Bash(bq insert*)"
     ],
     "ask": [
       "Bash(git push*)",
@@ -15,7 +21,8 @@
       "Bash(gcloud builds submit*)",
       "Bash(gcloud run jobs execute*)",
       "Bash(php artisan migrate --force*)",
-      "Bash(rm -rf*)"
+      "Bash(rm -rf*)",
+      "Bash(bq query*)"
     ]
   }
 }

@@ -1,10 +1,40 @@
 {
   "hooks": {
     "PreCompact": [
-      { "hooks": [ { "type": "command", "command": "~/Proyectos/forma-de-trabajo/hooks/compactacion.sh", "timeout": 20, "statusMessage": "Guardando punto de compactación…" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/Proyectos/forma-de-trabajo/hooks/compactacion.sh",
+            "timeout": 20,
+            "statusMessage": "Guardando punto de compactación…"
+          }
+        ]
+      }
     ],
     "PostCompact": [
-      { "hooks": [ { "type": "command", "command": "~/Proyectos/forma-de-trabajo/hooks/compactacion.sh", "timeout": 20 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/Proyectos/forma-de-trabajo/hooks/compactacion.sh",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "~/Proyectos/forma-de-trabajo/hooks/precommit-credenciales.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
