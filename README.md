@@ -56,11 +56,17 @@ jq -s '.[0] * {permissions: {deny: ((.[0].permissions.deny // []) + .[1].permiss
   ~/.claude/settings.json guardarrailes.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json
 ```
 
-**Qué garantiza cada lista, medido:** `deny` bloquea el comando en cualquier
-modo, incluido `bypassPermissions`. `ask` pregunta en `auto` y `default` — que
-es como corren los chats normales — pero **no en bypass**, cuyo propósito es
-justamente no preguntar. Por eso lo que no debe pasar nunca va en `deny`, y lo
-que requiere tu venia va en `ask` sabiendo que bypass la anula.
+**Qué garantiza cada lista, medido:** `deny` bloquea el comando antes de
+ejecutarse — comprobado en `auto` con `php artisan migrate:fresh --help`, que
+ningún chequeo incorporado cubre. `ask` fuerza un diálogo que ve el **usuario**;
+desde dentro de la sesión no se distingue «aprobado» de «no preguntó», así que
+compruébalo tú la primera vez pidiendo un `git push` y mirando si aparece el
+diálogo. En `bypassPermissions` los `ask` no preguntan, por definición.
+
+**Límite de las reglas por prefijo:** `Bash(git push*)` casa con comandos que
+*empiezan* por `git push`. `git -C <dir> push` o `cd x && git push` pueden no
+casar según la versión. Para lo que de verdad no debe pasar, `deny` y
+comandos simples; y no confíes en que un `ask` atrape todas las variantes.
 
 Ajusta las reglas a tu stack antes de aplicarlas: las de `php artisan` y
 `gcloud` son ejemplos de un proyecto Laravel en Cloud Run.
