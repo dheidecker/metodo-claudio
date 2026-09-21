@@ -147,8 +147,11 @@ En `<proyecto>/.claude/agents/<slug>.md`, con frontmatter `name`,
 - **Créalo cuando el trabajo se repita, no antes.** Un rol que nadie ha invocado
   es una definición vacía con memoria vacía.
 
-**Los agentes se fijan al arrancar la sesión.** Un rol recién creado o editado
-no existe hasta que se abre un chat nuevo. Para probar un rol: chat nuevo.
+**Agentes, hooks y `settings.json` del proyecto se fijan al arrancar la sesión.**
+Un rol recién creado o editado no existe hasta que se abre un chat nuevo; y un
+chat abierto en otra carpeta y movido después **no carga los hooks del
+proyecto** (comprobado: ni el `SessionStart` corrió). Para probar algo de un
+proyecto: chat nuevo, abierto en esa carpeta.
 
 ## 4. Chats: uno de larga vida por proyecto
 
