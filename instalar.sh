@@ -16,11 +16,20 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 echo "metodo-claudio: instalando desde $AQUI"
 mkdir -p "$(dirname "$DESTINO")"
 
-if [ -L "$DESTINO" ] && [ "$(readlink -f "$DESTINO")" = "$ORIGEN" ]; then
+if [ -L "$DESTINO" ] && [ "$(readlink "$DESTINO")" = "$ORIGEN" ]; then
   echo "  ya apunta aquí: $DESTINO"
 
+elif [ -L "$DESTINO" ] && [ ! -e "$DESTINO" ]; then
+  # Enlace colgante: el caso de un repo renombrado o movido. No hay nada que
+  # conservar del destino viejo — se respalda el enlace y se apunta aquí.
+  # (readlink -f sobre un colgante cuya carpeta ya no existe devuelve vacío y
+  # exit 1: con set -e mataba el instalador justo cuando más falta hacía.)
+  mv "$DESTINO" "$DESTINO.$STAMP.bak"
+  ln -s "$ORIGEN" "$DESTINO"
+  echo "  era un enlace colgante a $(readlink "$DESTINO.$STAMP.bak"): re-enlazado aquí"
+
 elif [ -L "$DESTINO" ]; then
-  # Enlace a otro sitio: se conserva lo que importaba y se suma esto.
+  # Enlace a otro sitio que sí existe: se conserva lo que importaba y se suma esto.
   VIEJO="$(readlink -f "$DESTINO")"
   mv "$DESTINO" "$DESTINO.$STAMP.bak"
   { echo "@$VIEJO"; echo "$IMPORT"; } > "$DESTINO"
