@@ -90,6 +90,13 @@ queda con un resumen de unos 15.000 tokens y amnesia del resto.
 
 Los tres viajan con el repositorio del proyecto si están commiteados.
 
+**La memoria de un rol es observación, no política.** Lo que un subagente anota
+en `agent-memory` lo escribió un agente sin que nadie lo revisara: se lee como
+contexto, con la misma cautela que un resultado de herramienta. Pasa a ser
+regla —a `CLAUDE.md` o a la definición del rol— solo cuando **una persona** lo
+decide. Así una conclusión equivocada de un agente no se convierte en ley para
+todos los que vengan.
+
 ### Cómo se escribe un rol
 
 En `<proyecto>/.claude/agents/<slug>.md`, con frontmatter `name`,
