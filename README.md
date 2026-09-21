@@ -110,6 +110,14 @@ trae su propio indicador — «Ventana de contexto N / 1M (x%)» en el desglose 
 uso, arriba a la derecha — que cubre lo mismo. Si solo usas Desktop, puedes
 quitar `statusLine` del snippet antes de aplicarlo; no hace daño dejarlo.
 
+## Bitácora de hooks, para podar con datos
+
+Cada hook deja una línea en `~/.claude/metodo-claudio.log`: fecha, hook,
+proyecto y resultado (`ok`, `AVISO`, `BLOQUEO`, `silencio`). `hooks/informe.sh
+[días]` la resume: cuántas veces disparó cada uno y con qué resultado. La
+regla de poda — «un hook que en un mes no disparó se revisa» — solo se puede
+aplicar si alguien lo sabe.
+
 ## Comprobar que llegó
 
 En el chat nuevo, pega el prompt de calibración de `METODOLOGIA.md` §6. Si

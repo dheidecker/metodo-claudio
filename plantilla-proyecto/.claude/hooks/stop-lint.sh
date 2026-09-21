@@ -4,6 +4,9 @@
 # Edit/Write, porque en modo auto se edita con sed y heredocs y eso no pasa por PostToolUse.
 # php -l falla -> exit 2 (bloquea; el harness cede tras 8 bloqueos). Blade -> solo avisa.
 set -uo pipefail
+# Bitácora para poder podar: qué hook, en qué proyecto, con qué resultado. Sin esto,
+# «si en un mes no disparó, se revisa» no se puede aplicar porque nadie lo sabe.
+bitacora(){ printf '%s | %-22s | %-32s | %s\n' "$(date '+%F %T')" "$1" "$(basename "${CLAUDE_PROJECT_DIR:-$PWD}")" "$2" >> "$HOME/.claude/metodo-claudio.log" 2>/dev/null || true; }
 IN="$(cat)"
 # evitar bucle: si ya estamos dentro de un Stop bloqueado, no volver a bloquear
 [ "$(jq -r '.stop_hook_active // false' <<<"$IN")" = "true" ] && exit 0
@@ -32,9 +35,12 @@ for d in $repos; do
   done <<<"$cambiados"
 done
 if [ -n "$errores" ]; then
-  echo "No se da por terminado: php -l falla en archivos cambiados:$errores" >&2; exit 2
+  echo "No se da por terminado: php -l falla en archivos cambiados:$errores" >&2; bitacora stop-lint "BLOQUEO php -l"; exit 2
 fi
 if [ -n "$avisos" ]; then
+  bitacora stop-lint "AVISO trampas"
   jq -n --arg m "Avisos de trampas en archivos cambiados (no bloquean):$avisos" '{systemMessage: $m}'
+else
+  bitacora stop-lint "ok"
 fi
 exit 0

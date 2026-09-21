@@ -3,6 +3,9 @@
 # Cuatro trampas con caso real en tickets/CLAUDE.md §10 que ningún linter ve.
 # AVISA (exit 0 + JSON): los greps pueden dar falsos positivos y bloquear sería peor.
 set -uo pipefail
+# Bitácora para poder podar: qué hook, en qué proyecto, con qué resultado. Sin esto,
+# «si en un mes no disparó, se revisa» no se puede aplicar porque nadie lo sabe.
+bitacora(){ printf '%s | %-22s | %-32s | %s\n' "$(date '+%F %T')" "$1" "$(basename "${CLAUDE_PROJECT_DIR:-$PWD}")" "$2" >> "$HOME/.claude/metodo-claudio.log" 2>/dev/null || true; }
 command -v jq >/dev/null || exit 0
 f="$(jq -r '.tool_input.file_path // .tool_response.filePath // empty')"
 [ -n "$f" ] && [ -f "$f" ] || exit 0
@@ -41,7 +44,8 @@ case "$f" in
     n="$(solo_cambiadas "$n")"; [ -n "$n" ] && avisos+=("->timestamp() sin nullable() (líneas $n): con explicit_defaults_for_timestamp=OFF el primero recibe ON UPDATE y cada UPDATE le pisa la hora; usa dateTime().")
     ;;
 esac
-[ ${#avisos[@]} -eq 0 ] && exit 0
+[ ${#avisos[@]} -eq 0 ] && { bitacora blade-trampas "silencio $(basename "$f")"; exit 0; }
 msg="Trampas conocidas en $(basename "$f"):"; for a in "${avisos[@]}"; do msg="$msg"$'\n'"- $a"; done
+bitacora blade-trampas "AVISO ${#avisos[@]} en $(basename "$f")"
 jq -n --arg m "$msg" '{systemMessage: $m, hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $m}}'
 exit 0
