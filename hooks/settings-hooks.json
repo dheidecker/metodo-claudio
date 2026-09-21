@@ -36,5 +36,10 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/Proyectos/forma-de-trabajo/hooks/statusline.sh",
+    "refreshInterval": 5
   }
 }

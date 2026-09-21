@@ -155,6 +155,15 @@ subagente. No resucites chats por costumbre, y **no actúes en masa sobre lo que
 el usuario cerró a propósito**: un chat cerrado o un servicio apagado suelen ser
 una decisión suya, no un fallo que arreglarle.
 
+**Tres hábitos de contexto, baratos:** `/clear` entre tareas que no tienen que
+ver — una sesión con contexto ajeno rinde peor que una limpia con mejor prompt.
+`/btw` para la pregunta al margen: la respuesta no entra al historial. Y si te
+corrigen dos veces lo mismo, el contexto ya está lleno de intentos fallidos:
+chat nuevo con un prompt que incorpore lo aprendido.
+
+**Al compactar, conserva siempre la lista completa de archivos modificados, los
+comandos de prueba que se usaron y las decisiones tomadas con su porqué.**
+
 **Si la compactación llega igual, que sea un punto de guardado.** Este repo trae
 un hook (`hooks/compactacion.sh`) que antes de compactar anota qué archivos se
 estaban tocando y las últimas peticiones, y después guarda el resumen que
