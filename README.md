@@ -25,8 +25,10 @@ git clone https://github.com/dheidecker/forma-de-trabajo.git
 forma-de-trabajo/instalar.sh
 ```
 
-Enlaza `~/.claude/CLAUDE.md` → `METODOLOGIA.md`, respaldando lo que hubiera.
-Idempotente.
+Si `~/.claude/CLAUDE.md` no existe, lo crea como enlace a `METODOLOGIA.md`. Si
+ya tienes reglas propias ahí, **se conservan**: el instalador añade una línea
+`@ruta/METODOLOGIA.md`, que Claude Code resuelve al cargar. Siempre respalda.
+Idempotente: correrlo dos veces no duplica nada.
 
 ## Comprobar que llegó
 
