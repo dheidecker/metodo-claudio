@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/Proyectos/forma-de-trabajo/hooks/compactacion.sh",
+            "command": "~/Proyectos/metodo-claudio/hooks/compactacion.sh",
             "timeout": 20,
             "statusMessage": "Guardando punto de compactación…"
           }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/Proyectos/forma-de-trabajo/hooks/compactacion.sh",
+            "command": "~/Proyectos/metodo-claudio/hooks/compactacion.sh",
             "timeout": 20
           }
         ]
@@ -30,7 +30,7 @@
           {
             "type": "command",
             "if": "Bash(git commit*)",
-            "command": "~/Proyectos/forma-de-trabajo/hooks/precommit-credenciales.sh",
+            "command": "~/Proyectos/metodo-claudio/hooks/precommit-credenciales.sh",
             "timeout": 10
           }
         ]
@@ -39,7 +39,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "~/Proyectos/forma-de-trabajo/hooks/statusline.sh",
+    "command": "~/Proyectos/metodo-claudio/hooks/statusline.sh",
     "refreshInterval": 5
   }
 }

@@ -1,7 +1,7 @@
 # Este repo ES una metodología — instálala, no la leas como código
 
 Si estás leyendo esto, alguien abrió una sesión de Claude Code dentro de
-`forma-de-trabajo/`. No hay nada que desarrollar aquí: es **un** archivo
+`metodo-claudio/`. No hay nada que desarrollar aquí: es **un** archivo
 markdown, `METODOLOGIA.md`, que define cómo se trabaja con Claude Code, y tu
 tarea es **dejarlo donde Claude Code lo lee**.
 

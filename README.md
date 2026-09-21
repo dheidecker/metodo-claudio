@@ -1,4 +1,4 @@
-# forma-de-trabajo
+# metodo-claudio
 
 Una metodología para trabajar con Claude Code, en un repo que se instala solo.
 Es **un** archivo markdown que Claude Code lee al arrancar cada sesión; no es
@@ -21,8 +21,8 @@ nuevo.
 ## Instalar — a mano
 
 ```bash
-git clone https://github.com/dheidecker/forma-de-trabajo.git
-forma-de-trabajo/instalar.sh
+git clone https://github.com/dheidecker/metodo-claudio.git
+metodo-claudio/instalar.sh
 ```
 
 Si `~/.claude/CLAUDE.md` no existe, lo crea como enlace a `METODOLOGIA.md`. Si
@@ -51,7 +51,7 @@ fusionándolas en `~/.claude/settings.json` — Claude no puede tocar sus propio
 permisos, por diseño:
 
 ```bash
-cd ~/Proyectos/forma-de-trabajo
+cd ~/Proyectos/metodo-claudio
 jq -s '.[0] * {permissions: {deny: ((.[0].permissions.deny // []) + .[1].permissions.deny | unique), ask: ((.[0].permissions.ask // []) + .[1].permissions.ask | unique)}}' \
   ~/.claude/settings.json guardarrailes.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json
 ```
@@ -81,7 +81,7 @@ resumen. Un archivo por compactación en
 bloquea. Como los guardarraíles, **lo aplicas tú**:
 
 ```bash
-cd ~/Proyectos/forma-de-trabajo
+cd ~/Proyectos/metodo-claudio
 jq -s '.[0] * .[1]' ~/.claude/settings.json hooks/settings-hooks.local.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json
 ```
 
@@ -92,7 +92,7 @@ probarlo, `/compact` en un chat y mira el directorio.
 ## Plantilla para un proyecto nuevo
 
 ```bash
-cp -r ~/Proyectos/forma-de-trabajo/plantilla-proyecto/.claude  <proyecto>/
+cp -r ~/Proyectos/metodo-claudio/plantilla-proyecto/.claude  <proyecto>/
 ```
 
 Trae `settings.json` con tres hooks —`php -l`/`node --check` tras cada edición,
@@ -111,7 +111,7 @@ push ni despliegues sin tu OK», está instalado.
 ## Quitar
 
 ```bash
-~/Proyectos/forma-de-trabajo/desinstalar.sh
+~/Proyectos/metodo-claudio/desinstalar.sh
 ```
 
 Deshace exactamente lo que hizo el instalador: quita el enlace, o quita solo

@@ -13,7 +13,7 @@ ORIGEN="$AQUI/METODOLOGIA.md"
 DESTINO="$HOME/.claude/CLAUDE.md"
 IMPORT="@$ORIGEN"
 
-echo "forma-de-trabajo: desinstalando"
+echo "metodo-claudio: desinstalando"
 
 if [ ! -e "$DESTINO" ] && [ ! -L "$DESTINO" ]; then
   echo "  no hay nada instalado en $DESTINO"
@@ -24,7 +24,7 @@ elif [ -L "$DESTINO" ] && [ "$(readlink -f "$DESTINO")" = "$ORIGEN" ]; then
 
 elif [ -f "$DESTINO" ] && grep -qxF "$IMPORT" "$DESTINO"; then
   # quita la línea @ y la cabecera que puso el instalador
-  grep -vxF "$IMPORT" "$DESTINO" | grep -vxF "# Metodología compartida (forma-de-trabajo)" > "$DESTINO.tmp"
+  grep -vxF "$IMPORT" "$DESTINO" | grep -vxF "# Metodología compartida (metodo-claudio)" > "$DESTINO.tmp"
   # colapsa líneas vacías finales
   sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$DESTINO.tmp"
   if [ -s "$DESTINO.tmp" ] && grep -q '[^[:space:]]' "$DESTINO.tmp"; then

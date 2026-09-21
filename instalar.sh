@@ -13,7 +13,7 @@ DESTINO="$HOME/.claude/CLAUDE.md"
 IMPORT="@$ORIGEN"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
-echo "forma-de-trabajo: instalando desde $AQUI"
+echo "metodo-claudio: instalando desde $AQUI"
 mkdir -p "$(dirname "$DESTINO")"
 
 if [ -L "$DESTINO" ] && [ "$(readlink -f "$DESTINO")" = "$ORIGEN" ]; then
@@ -32,7 +32,7 @@ elif [ -f "$DESTINO" ]; then
     echo "  ya importa la metodología: $DESTINO"
   else
     cp "$DESTINO" "$DESTINO.$STAMP.bak"
-    { echo; echo "# Metodología compartida (forma-de-trabajo)"; echo "$IMPORT"; } >> "$DESTINO"
+    { echo; echo "# Metodología compartida (metodo-claudio)"; echo "$IMPORT"; } >> "$DESTINO"
     echo "  tenía reglas propias: se conservan, y se añade la importación"
     echo "  respaldo:       $DESTINO.$STAMP.bak"
   fi
@@ -50,7 +50,7 @@ fi
 
 echo "  verificado:     $(grep -c 'Metodología de trabajo con Claude Code' "$ORIGEN") archivo, legible"
 # El snippet de hooks lleva la ruta real de este clon, sea cual sea.
-sed "s#~/Proyectos/forma-de-trabajo#$AQUI#g" "$AQUI/hooks/settings-hooks.json" > "$AQUI/hooks/settings-hooks.local.json"
+sed "s#~/Proyectos/metodo-claudio#$AQUI#g" "$AQUI/hooks/settings-hooks.json" > "$AQUI/hooks/settings-hooks.local.json"
 echo "  hooks:          hooks/settings-hooks.local.json generado con la ruta de este clon"
 
 echo
