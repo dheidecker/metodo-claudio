@@ -121,7 +121,7 @@ entera *y además* pierdes el detalle. La continuidad está en los archivos de
 §3, no en el chat.
 
 Conviene darle al chat un nombre que diga qué es —`<Proyecto> - Orquestador`—
-porque el nombre derivado que muestran las herramientas (`tickets-8c`) no dice
+porque el nombre derivado que muestran las herramientas (`proyecto-8c`) no dice
 nada.
 
 **Un chat cerrado se queda cerrado.** Si hace falta continuidad, está en los
