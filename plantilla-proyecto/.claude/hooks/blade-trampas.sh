@@ -20,7 +20,7 @@ case "$f" in
     [ -n "$n" ] && avisos+=("directiva Blade o <script> dentro de un comentario // (líneas $n): Blade lo procesa igual y rompe el head; usa {{-- --}}.")
     # select/checkbox con wire:model sin .live (caso: tres selectores perdían la selección)
     n=$(awk '/<select|type="checkbox"/{s=NR} s && /wire:model="/{ if ($0 !~ /wire:model\.live/) print NR; s=0 } /<\/select>|\/>/{s=0}' "$f" | head -3 | tr '\n' ',' | sed 's/,$//')
-    [ -n "$n" ] && avisos+=("select/checkbox con wire:model sin .live (líneas $n): un re-render lo repinta vacío; ver tickets/CLAUDE.md §10, regla de las tres cosas.")
+    [ -n "$n" ] && avisos+=("select/checkbox con wire:model sin .live (líneas $n): un re-render lo repinta vacío; regla de las tres cosas: .live, @selected emitido por el servidor, y valor desde el evento si se consume en el mismo gesto.")
     ;;
   */database/migrations/*.php)
     # TIMESTAMP NOT NULL: MySQL le pone ON UPDATE CURRENT_TIMESTAMP al primero (caso: cartera_historial perdió la hora en 5.509 filas)
