@@ -5,6 +5,7 @@
 # Escribe en ~/.claude/projects/<proyecto>/compactaciones/<fecha>-<sesión>.md
 # Nunca bloquea: cualquier fallo sale 0 en silencio. Solo necesita jq.
 set -uo pipefail
+bitacora(){ printf '%s | %-22s | %-32s | %s\n' "$(date '+%F %T')" "$1" "$(basename "${CLAUDE_PROJECT_DIR:-$PWD}")" "$2" >> "$HOME/.claude/metodo-claudio.log" 2>/dev/null || true; }
 command -v jq >/dev/null || exit 0
 
 IN="$(cat)"
@@ -51,4 +52,5 @@ case "$evento" in
     } >> "$out"
     ;;
 esac
+bitacora compactacion "$evento $disparo -> $(basename "$out")"
 exit 0
