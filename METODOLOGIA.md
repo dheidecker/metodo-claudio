@@ -43,6 +43,12 @@ tres archivos cuesta más de lo que ahorra.
   (por ejemplo `desarrollador`, `qa`, `disenador`), con sus límites escritos.
   Si un proyecto no tiene roles, usa `general-purpose` y crea el rol cuando el
   trabajo se repita.
+- **Una coreografía de varios subagentes que se repite** (por cada archivo:
+  arreglar → verificar → juntar): un **Workflow**, guardado en
+  `<proyecto>/.claude/workflows/`. Es de segundo escalón: cada agente arranca
+  con su piso de ~30.000 tokens, así que para una tarea suelta va un subagente
+  y para la misma tarea repetida cincuenta veces, un workflow. Se escribe
+  cuando aparece el caso real, no antes.
 - Todo rol lleva **`memory: project`** en el frontmatter. Sin ese campo no tiene
   memoria propia; con él, escribe solo en `.claude/agent-memory/<rol>/`.
 
