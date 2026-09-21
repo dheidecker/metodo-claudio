@@ -56,6 +56,12 @@ jq -s '.[0] * {permissions: {deny: ((.[0].permissions.deny // []) + .[1].permiss
   ~/.claude/settings.json guardarrailes.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json
 ```
 
+**Qué garantiza cada lista, medido:** `deny` bloquea el comando en cualquier
+modo, incluido `bypassPermissions`. `ask` pregunta en `auto` y `default` — que
+es como corren los chats normales — pero **no en bypass**, cuyo propósito es
+justamente no preguntar. Por eso lo que no debe pasar nunca va en `deny`, y lo
+que requiere tu venia va en `ask` sabiendo que bypass la anula.
+
 Ajusta las reglas a tu stack antes de aplicarlas: las de `php artisan` y
 `gcloud` son ejemplos de un proyecto Laravel en Cloud Run.
 
