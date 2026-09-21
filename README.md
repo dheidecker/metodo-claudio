@@ -9,6 +9,32 @@ chats, encargos densos con informes delgados, roles con memoria propia, y una
 lista corta de lo que siempre necesita autorización. Con los números que lo
 justifican.
 
+## Qué hay en el repo
+
+```
+METODOLOGIA.md              lo que carga cada sesión (~190 líneas): la metodología entera
+CLAUDE.md                   lo que Claude lee al abrir esta carpeta: cómo instalarse
+instalar.sh / desinstalar.sh
+guardarrailes.json          permissions.deny / ask para lo irreversible
+hooks/
+  compactacion.sh           PreCompact + PostCompact: punto de guardado al compactar
+  precommit-credenciales.sh PreToolUse en git commit: bloquea .env, claves, cuentas de servicio
+  statusline.sh             % de contexto con semáforo (solo CLI)
+  informe.sh                resume la bitácora de hooks para podar
+  settings-hooks.json       el snippet de settings.json con todo lo anterior
+plantilla-proyecto/.claude/ lo que se copia a un proyecto nuevo:
+  settings.json             tres hooks del proyecto, sin rutas escritas (CLAUDE_PROJECT_DIR)
+  hooks/lint-editado.sh     php -l / node --check tras cada edición, en el mismo turno
+  hooks/blade-trampas.sh    trampas Blade/migraciones en las líneas cambiadas; avisa
+  hooks/stop-lint.sh        puerta Stop: bloquea si php -l falla en lo cambiado en la sesión
+  hooks/session-marca.sh    marca de inicio de sesión para que stop-lint solo mire lo de hoy
+  agents/desarrollador.md   rol genérico con memory: project, para especializar
+```
+
+Dos capas: lo **global** (`METODOLOGIA.md`, `guardarrailes.json`, `hooks/`) se
+instala una vez por máquina; lo de **proyecto** (`plantilla-proyecto/`) se copia
+a cada repo y se especializa con sus trampas.
+
 ## Instalar — la forma corta
 
 Clona el repo, abre una sesión de Claude Code **dentro de la carpeta** y dile:
@@ -67,6 +93,11 @@ así que esa comprobación la hace quien instala, una vez. En `bypassPermissions
 *empiezan* por `git push`. `git -C <dir> push` o `cd x && git push` pueden no
 casar según la versión. Para lo que de verdad no debe pasar, `deny` y
 comandos simples; y no confíes en que un `ask` atrape todas las variantes.
+
+**Y un hook que las reglas por patrón no pueden hacer:** `hooks/precommit-credenciales.sh`
+corre antes de cada `git commit` (`PreToolUse` con `if: Bash(git commit*)`) y
+bloquea si el índice trae `.env`, cuentas de servicio, claves `.pem`/`.key` o
+`secrets.*`. Va en el mismo snippet que el resto de hooks.
 
 Ajusta las reglas a tu stack antes de aplicarlas: las de `php artisan` y
 `gcloud` son ejemplos de un proyecto Laravel en Cloud Run.
