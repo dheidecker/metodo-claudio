@@ -58,10 +58,10 @@ jq -s '.[0] * {permissions: {deny: ((.[0].permissions.deny // []) + .[1].permiss
 
 **Qué garantiza cada lista, medido:** `deny` bloquea el comando antes de
 ejecutarse — comprobado en `auto` con `php artisan migrate:fresh --help`, que
-ningún chequeo incorporado cubre. `ask` fuerza un diálogo que ve el **usuario**;
-desde dentro de la sesión no se distingue «aprobado» de «no preguntó», así que
-compruébalo tú la primera vez pidiendo un `git push` y mirando si aparece el
-diálogo. En `bypassPermissions` los `ask` no preguntan, por definición.
+ningún chequeo incorporado cubre. `ask` fuerza un diálogo que ve el **usuario** —
+comprobado en `auto` con `git push --dry-run`: apareció el diálogo y el usuario
+decidió. Desde dentro de la sesión no se distingue «aprobado» de «no preguntó»,
+así que esa comprobación la hace quien instala, una vez. En `bypassPermissions` los `ask` no preguntan, por definición.
 
 **Límite de las reglas por prefijo:** `Bash(git push*)` casa con comandos que
 *empiezan* por `git push`. `git -C <dir> push` o `cd x && git push` pueden no
