@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "PreCompact": [
+      { "hooks": [ { "type": "command", "command": "~/Proyectos/forma-de-trabajo/hooks/compactacion.sh", "timeout": 20, "statusMessage": "Guardando punto de compactación…" } ] }
+    ],
+    "PostCompact": [
+      { "hooks": [ { "type": "command", "command": "~/Proyectos/forma-de-trabajo/hooks/compactacion.sh", "timeout": 20 } ] }
+    ]
+  }
+}

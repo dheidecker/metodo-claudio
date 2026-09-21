@@ -59,6 +59,23 @@ jq -s '.[0] * {permissions: {deny: ((.[0].permissions.deny // []) + .[1].permiss
 Ajusta las reglas a tu stack antes de aplicarlas: las de `php artisan` y
 `gcloud` son ejemplos de un proyecto Laravel en Cloud Run.
 
+## Punto de guardado al compactar (opcional)
+
+`hooks/compactacion.sh` se engancha a `PreCompact` y `PostCompact`: antes de
+compactar anota archivos tocados y últimas peticiones; después guarda el
+resumen. Un archivo por compactación en
+`~/.claude/projects/<proyecto>/compactaciones/`. Solo necesita `jq`; nunca
+bloquea. Como los guardarraíles, **lo aplicas tú**:
+
+```bash
+cd ~/Proyectos/forma-de-trabajo
+jq -s '.[0] * .[1]' ~/.claude/settings.json hooks/settings-hooks.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json
+```
+
+Si ya tenías hooks `PreCompact`/`PostCompact`, este comando los reemplaza por
+los del repo: fusiónalos a mano en ese caso. Después, chat nuevo. Para
+probarlo, `/compact` en un chat y mira el directorio.
+
 ## Comprobar que llegó
 
 En el chat nuevo, pega el prompt de calibración de `METODOLOGIA.md` §6. Si

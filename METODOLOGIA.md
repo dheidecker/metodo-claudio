@@ -137,6 +137,13 @@ subagente. No resucites chats por costumbre, y **no actúes en masa sobre lo que
 el usuario cerró a propósito**: un chat cerrado o un servicio apagado suelen ser
 una decisión suya, no un fallo que arreglarle.
 
+**Si la compactación llega igual, que sea un punto de guardado.** Este repo trae
+un hook (`hooks/compactacion.sh`) que antes de compactar anota qué archivos se
+estaban tocando y las últimas peticiones, y después guarda el resumen que
+quedó en la ventana, en `~/.claude/projects/<proyecto>/compactaciones/`. Lo que
+el resumen diluye queda en disco. Lo instala el usuario en su `settings.json`,
+no Claude.
+
 **Lo único que un subagente no hace es trabajar con el chat cerrado**: muere con
 su sesión. Para eso están las tareas programadas.
 
