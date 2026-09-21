@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(php artisan migrate:fresh*)",
+      "Bash(php artisan migrate:refresh*)",
+      "Bash(php artisan migrate:rollback*)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(gcloud run deploy*)",
+      "Bash(gcloud builds submit*)",
+      "Bash(gcloud run jobs execute*)",
+      "Bash(php artisan migrate --force*)",
+      "Bash(rm -rf*)"
+    ]
+  }
+}

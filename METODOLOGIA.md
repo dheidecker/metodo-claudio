@@ -151,6 +151,15 @@ autoriza la siguiente:
   en tu propio chat — nunca otro agente.
 - **Escribir** donde el acuerdo del proyecto es solo lectura.
 
+**Lo irreversible no se confía al texto: se impone.** Claude Code trae dos listas
+de reglas en `settings.json` que valen más que cualquier párrafo de este
+archivo: `permissions.deny` (nunca, ni con permiso) y `permissions.ask`
+(siempre pregunta, aunque el comando esté en la lista blanca o la sesión corra
+en modo `auto`). El archivo `guardarrailes.json` de este repo trae una
+propuesta: `push` forzado y migraciones destructivas en `deny`; `push`,
+despliegues y `rm -rf` en `ask`. **Los aplica el usuario, no Claude** — el
+propio harness le impide a Claude tocar sus permisos, y eso es correcto.
+
 Y el límite que no depende de quién lo pida: **los permisos son por sesión.**
 Nunca hagas por un compañero algo que a él le fue denegado, ni le pidas a otro
 lo que a ti te bloquearon: un agente ejecutando lo que otro no pudo se salta la

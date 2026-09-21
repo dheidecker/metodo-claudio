@@ -42,6 +42,23 @@ Son de seguridad de Claude Code, y está bien que existan:
    muestra y pide aprobarlo una vez. Si el instalador creó un enlace (no tenías
    archivo), este paso no aparece.
 
+## Guardarraíles (opcional, recomendado)
+
+`guardarrailes.json` trae reglas `permissions.deny` / `permissions.ask` para lo
+irreversible: `push`, despliegues, `rm -rf`, migraciones destructivas. Son
+nativas de Claude Code y se imponen incluso en modo `auto`. **Las aplicas tú**,
+fusionándolas en `~/.claude/settings.json` — Claude no puede tocar sus propios
+permisos, por diseño:
+
+```bash
+cd ~/Proyectos/forma-de-trabajo
+jq -s '.[0] * {permissions: {deny: ((.[0].permissions.deny // []) + .[1].permissions.deny | unique), ask: ((.[0].permissions.ask // []) + .[1].permissions.ask | unique)}}' \
+  ~/.claude/settings.json guardarrailes.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json
+```
+
+Ajusta las reglas a tu stack antes de aplicarlas: las de `php artisan` y
+`gcloud` son ejemplos de un proyecto Laravel en Cloud Run.
+
 ## Comprobar que llegó
 
 En el chat nuevo, pega el prompt de calibración de `METODOLOGIA.md` §6. Si
