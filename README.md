@@ -30,6 +30,18 @@ ya tienes reglas propias ahí, **se conservan**: el instalador añade una línea
 `@ruta/METODOLOGIA.md`, que Claude Code resuelve al cargar. Siempre respalda.
 Idempotente: correrlo dos veces no duplica nada.
 
+## Los dos clics que no se pueden automatizar
+
+Son de seguridad de Claude Code, y está bien que existan:
+
+1. **Confiar en la carpeta.** La primera vez que Claude Code abre un directorio
+   nuevo pregunta si confías en él antes de leer su `CLAUDE.md`. Di sí, o
+   «instala esto» no hace nada.
+2. **Aprobar la importación**, solo si ya tenías reglas propias: cuando un
+   `CLAUDE.md` importa un archivo de fuera de `~/.claude`, Claude Code lo
+   muestra y pide aprobarlo una vez. Si el instalador creó un enlace (no tenías
+   archivo), este paso no aparece.
+
 ## Comprobar que llegó
 
 En el chat nuevo, pega el prompt de calibración de `METODOLOGIA.md` §6. Si
