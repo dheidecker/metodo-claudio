@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Dispatcher de mecanismo (CONTRATO §2). Lo enlaza instalar.sh en ~/.local/bin/mecanismo.
-# Resuelve su ruta real, pone mecanismo/ en PYTHONPATH y llama lib/<x>/cli.py:main(argv).
+# Resuelve su ruta real, pone mecanismo/ en PYTHONPATH y llama lib/<x>/cli.py:main(argv)
+# (o el módulo que fije el subcomando, p. ej. `confiar` -> lib/evidencia/confianza.py).
 # Exit: 0 ok · 1 comprobación falló · 2 uso incorrecto · 3 falta TTY · 4 falta python3/PyYAML.
 set -uo pipefail
 
@@ -17,6 +18,7 @@ uso: mecanismo <subcomando> [args]
   propuestas   [ver ID]               lista las propuestas pendientes
   aprobar ID   / rechazar ID          exige una terminal (TTY): lo decide una persona
   verificar    [--funciones a,b]      deja evidencia en .claude/evidencia/
+  confiar      [dir]                  exige TTY: autoriza los comandos del yml del proyecto
   permisos     [--dias N] [--json]
   init         --tipo mcp|web|lib [dir]
   hook <nombre> [args]                lo que llaman los shims; stdin = JSON del hook
@@ -34,6 +36,7 @@ bitacora() {
 
 [ $# -gt 0 ] || { uso >&2; exit 2; }
 sub="$1"; shift
+mod=cli   # módulo dentro de lib/<pkg>/ (no se hereda del entorno)
 
 case "$sub" in
   -h|--help|help) uso; exit 0 ;;
@@ -58,13 +61,14 @@ case "$sub" in
   propuestas)           pkg=propuestas ;;               # main([]) lista · main(["ver", ID])
   aprobar|rechazar)     pkg=propuestas; set -- "$sub" "$@" ;;   # main(["aprobar", ID])
   verificar)            pkg=evidencia ;;
+  confiar)              pkg=evidencia; mod=confianza ;; # CONTRATO §11: main(argv) en lib.evidencia.confianza
   permisos)             pkg=permisos ;;
   init)                 pkg=init ;;
   *) echo "mecanismo: subcomando desconocido '$sub'" >&2; uso >&2; exit 2 ;;
 esac
 
-if [ ! -f "$RAIZ/lib/$pkg/cli.py" ]; then
-  echo "mecanismo $sub: el paquete lib/$pkg todavía no existe en este clon ($RAIZ)." >&2
+if [ ! -f "$RAIZ/lib/$pkg/$mod.py" ]; then
+  echo "mecanismo $sub: el paquete lib/$pkg/$mod.py todavía no existe en este clon ($RAIZ)." >&2
   echo "  ¿un 'git pull' pendiente, o el frente que lo escribe aún no se integró?" >&2
   exit 2
 fi
@@ -73,4 +77,4 @@ command -v python3 >/dev/null 2>&1 || { echo "mecanismo: falta python3 (3.12 o m
 # lib/__init__.py taparía nuestro paquete `lib` al correr mecanismo desde su raíz.
 python3 -P -c 'import yaml' 2>/dev/null || { echo "mecanismo: falta PyYAML — instala python3-yaml (apt install python3-yaml)" >&2; exit 4; }
 
-exec python3 -P -c 'import sys; from lib.'"$pkg"'.cli import main; sys.exit(main(sys.argv[1:]))' "$@"
+exec python3 -P -c 'import sys; from lib.'"$pkg.$mod"' import main; sys.exit(main(sys.argv[1:]))' "$@"
