@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mecanismo propuesta v1",
+  "type": "object",
+  "required": [
+    "id",
+    "estado",
+    "creada",
+    "origen",
+    "tipo",
+    "destino",
+    "resumen",
+    "evidencia",
+    "contenido"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "estado": {
+      "enum": [
+        "pendiente",
+        "aprobada",
+        "rechazada"
+      ]
+    },
+    "creada": {
+      "type": "string"
+    },
+    "origen": {
+      "enum": [
+        "recolector",
+        "permisos",
+        "bitacora"
+      ]
+    },
+    "tipo": {
+      "enum": [
+        "trampa-nueva",
+        "regla-metodologia",
+        "regla-proyecto",
+        "subir-a-hook",
+        "subir-a-bloqueo",
+        "podar",
+        "permiso-allow",
+        "permiso-quitar-ask",
+        "envolver-script"
+      ]
+    },
+    "destino": {
+      "enum": [
+        "trampa",
+        "metodologia",
+        "proyecto",
+        "permisos"
+      ]
+    },
+    "resumen": {
+      "type": "string"
+    },
+    "evidencia": {
+      "type": "object",
+      "required": [
+        "ocurrencias"
+      ],
+      "properties": {
+        "ocurrencias": {
+          "type": "integer"
+        },
+        "proyectos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dias": {
+          "type": "integer"
+        },
+        "puntuacion": {
+          "type": "number"
+        },
+        "ejemplos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3
+        }
+      },
+      "additionalProperties": false
+    },
+    "contenido": {
+      "type": "object"
+    },
+    "nota": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

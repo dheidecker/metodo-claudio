@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""Canario F0: anota en la bitácora qué eventos de permiso disparan de verdad.
+Engánchalo (lo aplica el usuario) en PermissionRequest, PermissionDenied y Notification.
+Nunca decide nada: siempre exit 0 sin salida. Se poda cuando ya se sepa la respuesta."""
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from lib import comun
+
+d = comun.leer_stdin_json()
+ev = d.get("hook_event_name") or "?"
+detalle = d.get("notification_type") or d.get("tool_name") or ""
+comun.bitacora("canario-permisos", f"EVENTO {ev} {detalle}".strip(),
+               proyecto=pathlib.Path(d.get("cwd") or ".").resolve().name if d.get("cwd") else None)
+sys.exit(0)

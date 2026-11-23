@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mecanismo trampa v1",
+  "type": "object",
+  "required": [
+    "id",
+    "nivel",
+    "globs",
+    "patron",
+    "mensaje",
+    "origen",
+    "prueba"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "nivel": {
+      "enum": [
+        "aviso",
+        "bloqueo"
+      ]
+    },
+    "globs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "patron": {
+      "type": "string"
+    },
+    "excepto": {
+      "type": "string"
+    },
+    "bloque": {
+      "type": "object",
+      "required": [
+        "abre",
+        "cierra"
+      ],
+      "properties": {
+        "abre": {
+          "type": "string"
+        },
+        "cierra": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "mensaje": {
+      "type": "string"
+    },
+    "origen": {
+      "type": "string"
+    },
+    "prueba": {
+      "type": "object",
+      "required": [
+        "dispara",
+        "no_dispara"
+      ],
+      "properties": {
+        "dispara": {
+          "type": "string"
+        },
+        "no_dispara": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "max": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "additionalProperties": false
+}

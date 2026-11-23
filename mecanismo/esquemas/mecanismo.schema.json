@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mecanismo mecanismo v1",
+  "type": "object",
+  "required": [
+    "version",
+    "tipo",
+    "puerta"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "tipo": {
+      "enum": [
+        "mcp",
+        "web",
+        "lib"
+      ]
+    },
+    "puerta": {
+      "enum": [
+        "aviso",
+        "bloqueo"
+      ]
+    },
+    "arranque": {
+      "type": "string"
+    },
+    "mcp": {
+      "type": "object"
+    },
+    "web": {
+      "type": "object"
+    },
+    "lib": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

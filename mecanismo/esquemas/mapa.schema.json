@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mecanismo mapa v1",
+  "type": "object",
+  "required": [
+    "funciones"
+  ],
+  "properties": {
+    "funciones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "globs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "globs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mcp": {
+            "type": "object"
+          },
+          "web": {
+            "type": "object"
+          },
+          "test": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "required": [
+              "mcp"
+            ]
+          },
+          {
+            "required": [
+              "web"
+            ]
+          },
+          {
+            "required": [
+              "test"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}

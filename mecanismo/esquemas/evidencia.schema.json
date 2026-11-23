@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mecanismo evidencia v1",
+  "type": "object",
+  "required": [
+    "version",
+    "ts",
+    "proyecto",
+    "head",
+    "tipo",
+    "ok",
+    "funciones",
+    "huellas"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "ts": {
+      "type": "string"
+    },
+    "proyecto": {
+      "type": "string"
+    },
+    "head": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tipo": {
+      "enum": [
+        "mcp",
+        "web",
+        "lib"
+      ]
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "funciones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "ok",
+          "comando",
+          "resumen"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "comando": {
+            "type": "string"
+          },
+          "resumen": {
+            "type": "string"
+          },
+          "capturas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "diffs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "duracion_ms": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "huellas": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}
