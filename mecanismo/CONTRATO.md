@@ -37,7 +37,8 @@ mecanismo/
 ## 2. Dispatcher y CLI (`bin/mecanismo`, frente E)
 
 `bin/mecanismo` resuelve su ruta real (`readlink -f`), pone `mecanismo/` en `PYTHONPATH` y llama
-`python3 -c 'import sys; from lib.<x>.cli import main; sys.exit(main(sys.argv[1:]))' "$@"`.
+`python3 -P -c 'import sys; from lib.<x>.cli import main; sys.exit(main(sys.argv[1:]))' "$@"`
+(`-P`: sin él, un proyecto con su propio `lib/` tapa el nuestro).
 
 | Subcomando | Paquete | Uso mínimo |
 |---|---|---|
@@ -203,3 +204,34 @@ Hooks y YAML: `leer_yaml(path)` (lanza `SinPyYAML`), `leer_stdin_json()`, `salid
   disparó **`PermissionRequest` (tool_name=Bash)**; `PermissionDenied` y `Notification` no dispararon
   en modo `-p`. Bitácora: `2026-11-23 11:11:00 | canario-permisos | proy | EVENTO PermissionRequest Bash`.
   Falta verlo en una sesión interactiva: el instalador imprime el snippet para engancharlo.
+
+## 10. Enmiendas de la integración (23-nov, pedidas por los frentes)
+
+Mandan sobre lo anterior donde choquen.
+
+- **Hooks Stop imprimen solo `{"systemMessage": …}`** (como `stop-lint.sh`): `comun.salida_hook` añade
+  `hookSpecificOutput`, que Stop no admite. `salida_hook` queda para PostToolUse. Aplica a
+  `hooks/trampas --stop` y `hooks/stop-evidencia`.
+- **`lib.propuestas`** recibe `argv` con el subcomando delante: `propuestas [ver ID|--todas|--json]` →
+  `main(X)`, `aprobar ID` → `main(["aprobar", ID])`, `rechazar ID` → `main(["rechazar", ID])`.
+  Una propuesta aprobada o rechazada se queda en `propuestas/` con su `estado`, para que su id no
+  vuelva a proponerse. `subir-a-bloqueo` y `podar` al aprobarse imprimen el cambio; no editan el yml.
+- **`mecanismo hook X`**: si falta `hooks/X`, exit 0 y `error` en la bitácora (un fallo de instalación
+  nunca bloquea una sesión); nombre inválido, exit 2.
+- **Trampas**: `silencio` solo se anota si el proyecto tiene `.claude/trampas/`; una trampa inválida se
+  salta y deja `error trampa-invalida <id>`. CLI extra: `--trampas DIR`, `--cambiadas`; `--archivo` y
+  `--arbol` salen con 1 si hay aciertos. `cargar_trampas(dir, errores=None)`.
+- **Evidencia**: la cola de salida de una vía `test` va a `.claude/evidencia/<ts>-<id>.log`, citada en
+  `capturas` (y en `diffs` si falla). `verificar` añade `--grabar-golden`, `--sid`, `--json`, escribe
+  `.claude/evidencia/.gitignore` con `*`, y levanta `arranque` solo si nada escucha (y lo mata al final).
+  `mecanismo.yml` admite opcionales `mcp.timeout`, `web.ignorar_red` (por defecto `/favicon.ico`),
+  `web.timeout`, `web.espera_ms`, `lib.timeout`.
+  Goldens MCP: `<golden>/tools-list.json` y `<golden>/<tool>/<caso>.json`; una divergencia casa con la
+  ruta aplanada (`content/0/text/meta/version`) exacta, por glob o por prefijo.
+- **Recolector**: `--proyecto`, `--top`; tercera llamada `trampas` (Sonnet) solo con `--fuente claudemd`.
+  Entorno: `MECANISMO_CLAUDE`, `MECANISMO_GH`, `MECANISMO_PRESUPUESTO_USD` (solo baja el tope de 2),
+  `MECANISMO_LOTE`, `MECANISMO_MODELO_<TAREA>`, `MECANISMO_TIMEOUT`.
+- **Permisos**: `--proponer`, `--min N`, `--subagentes` (lector propio de `subagents/`, que
+  `comun.iterar_transcripts` no recorre). `contenido` de permisos admite `script`, `mantener`,
+  `variantes`, `quitar_de_ask`. «Diálogo» = `source == user_temporary` o `decision != accept`;
+  AskUserQuestion/ExitPlanMode se cuentan aparte. Lista de nunca-allow: `lib/permisos/familias.NUNCA_ALLOW`.
