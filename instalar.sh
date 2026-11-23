@@ -83,14 +83,15 @@ BIN_ORIGEN="$AQUI/mecanismo/bin/mecanismo"
 if [ -L "$BIN" ] && [ "$(readlink "$BIN")" = "$BIN_ORIGEN" ]; then
   echo "  mecanismo:      ya enlazado: $BIN"
 
-elif [ -L "$BIN" ] && [ ! -e "$BIN" ]; then
-  # Colgante (clon movido o borrado): no hay nada que conservar, se rehace.
+elif [ -L "$BIN" ] && [ ! -e "$BIN" ] && [[ "$(readlink "$BIN")" == */mecanismo/bin/mecanismo ]]; then
+  # Colgante a un clon nuestro (movido o borrado): no hay nada que conservar, se rehace.
   VIEJO_BIN="$(readlink "$BIN")"
   rm "$BIN"; ln -s "$BIN_ORIGEN" "$BIN"; CAMBIOS=1
   echo "  mecanismo:      era un enlace colgante a $VIEJO_BIN: re-enlazado aquí"
 
 elif [ -e "$BIN" ] || [ -L "$BIN" ]; then
-  # Ajeno: un archivo, o un enlace a otro sitio que sí existe. Se respalda, no se borra.
+  # Ajeno: un archivo, un enlace a otro sitio que sí existe, o un colgante a otra
+  # herramienta (no a un */mecanismo/bin/mecanismo). Se respalda, no se borra.
   mv "$BIN" "$BIN.$STAMP.bak"
   ln -s "$BIN_ORIGEN" "$BIN"; CAMBIOS=1
   echo "  mecanismo:      había algo ajeno en $BIN: enlazado aquí"
@@ -125,10 +126,14 @@ echo "En el chat nuevo, Claude se presenta solo en tres líneas. Si no lo hace, 
 
 echo
 echo "Opcional, lo aplicas tú (Claude no puede tocar tu settings.json):"
-echo "  guardarraíles + hook de compactación + allow de mecanismo, en un solo paso:"
+echo "  guardarraíles + hook de compactación + allow y deny de mecanismo, en un solo paso:"
 # Las lecturas y verificaciones de mecanismo no deben pedir permiso (PLAN §1: cero prompts nuevos).
+# `verificar` en allow es seguro: solo ejecuta comandos del yml que confiaste tú (CONTRATO §11).
 ALLOW='["Bash(mecanismo trampas*)", "Bash(mecanismo verificar*)", "Bash(mecanismo recolectar*)", "Bash(mecanismo permisos*)", "Bash(chrome-devtools *)"]'
-echo "  jq -s '.[0] * .[1] * {permissions: {deny: ((.[0].permissions.deny // []) + .[2].permissions.deny | unique), ask: ((.[0].permissions.ask // []) + .[2].permissions.ask | unique), allow: ((.[0].permissions.allow // []) + $ALLOW | unique)}}' ~/.claude/settings.json $AQUI/hooks/settings-hooks.local.json $AQUI/guardarrailes.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json"
+# Lo que decide una persona, nunca un agente: deny vale aunque la sesión corra en modo auto.
+DENY='["Bash(mecanismo aprobar*)", "Bash(mecanismo rechazar*)", "Bash(mecanismo confiar*)", "Bash(script *)"]'
+echo "  (el deny de aprobar/rechazar/confiar y de \`script\` es la frontera real contra que un agente se auto-apruebe: CONTRATO §11)"
+echo "  jq -s '.[0] * .[1] * {permissions: {deny: ((.[0].permissions.deny // []) + .[2].permissions.deny + $DENY | unique), ask: ((.[0].permissions.ask // []) + .[2].permissions.ask | unique), allow: ((.[0].permissions.allow // []) + $ALLOW | unique)}}' ~/.claude/settings.json $AQUI/hooks/settings-hooks.local.json $AQUI/guardarrailes.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json"
 echo
 echo "  canario de permisos (opcional, temporal): anota en la bitácora qué eventos de permiso disparan."
 CANARIO='{"hooks": [{"type": "command", "command": "mecanismo hook canario-permisos", "timeout": 5}]}'

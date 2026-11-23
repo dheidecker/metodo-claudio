@@ -57,7 +57,8 @@ class TestDispatcher(Base):
     def test_help_y_version(self):
         r = self.run_(["--help"])
         self.assertEqual(r.returncode, 0)
-        for sub in ("trampas", "recolectar", "propuestas", "aprobar", "verificar", "permisos", "init", "hook"):
+        for sub in ("trampas", "recolectar", "propuestas", "aprobar", "verificar", "confiar", "permisos",
+                    "init", "hook"):
             self.assertIn(sub, r.stdout)
         r = self.run_(["version"])
         self.assertEqual(r.returncode, 0)
@@ -71,7 +72,8 @@ class TestDispatcher(Base):
 
     def test_paquete_inexistente_sale_2_sin_traceback(self):
         m = self.copia_minima()
-        for sub in ("trampas", "recolectar", "propuestas", "aprobar", "rechazar", "verificar", "permisos", "init"):
+        for sub in ("trampas", "recolectar", "propuestas", "aprobar", "rechazar", "verificar", "confiar",
+                    "permisos", "init"):
             r = self.run_([sub], bin_=m / "bin" / "mecanismo")
             self.assertEqual(r.returncode, 2, sub)
             self.assertIn("todavía no existe", r.stderr, sub)
@@ -95,6 +97,27 @@ class TestDispatcher(Base):
         self.assertEqual(json.loads(r.stdout), ["aprobar", "abc"])
         r = self.run_(["rechazar", "abc"], bin_=b)
         self.assertEqual(json.loads(r.stdout), ["rechazar", "abc"])
+
+    def test_confiar_despacha_a_evidencia_confianza(self):
+        # CONTRATO §11: `confiar` -> lib.evidencia.confianza.main(argv), no lib.evidencia.cli.
+        m = self.copia_minima()
+        ev = m / "lib" / "evidencia"
+        ev.mkdir()
+        (ev / "__init__.py").write_text("")
+        (ev / "cli.py").write_text("def main(argv):\n    print('cli')\n    return 0\n")
+        b = m / "bin" / "mecanismo"
+        # con lib/evidencia/cli.py pero sin confianza.py: «todavía no existe», exit 2
+        r = self.run_(["confiar"], bin_=b)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("todavía no existe", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        (ev / "confianza.py").write_text(
+            "import json\ndef main(argv):\n    print(json.dumps(['confianza', *argv]))\n    return 5\n")
+        r = self.run_(["confiar", "/x y"], bin_=b)
+        self.assertEqual((r.returncode, json.loads(r.stdout)), (5, ["confianza", "/x y"]))
+        # `verificar` sigue yendo a cli.py, y un `mod` del entorno no cambia el módulo
+        r = self.run_(["verificar"], bin_=b, env=dict(self.env, mod="confianza"))
+        self.assertEqual(r.stdout.strip(), "cli")
 
     def test_enlace_simbolico_resuelve_la_raiz_real(self):
         enlace = self.tmp / "home" / "mecanismo"

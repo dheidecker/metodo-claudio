@@ -4,8 +4,9 @@
 # - Si ~/.claude/CLAUDE.md es nuestro enlace, lo quita.
 # - Si es un archivo del usuario con nuestra línea @, quita solo esa línea
 #   (y su cabecera). Las reglas propias del usuario quedan intactas.
-# - Si el archivo queda vacío después, lo borra.
-# - Quita ~/.local/bin/mecanismo solo si es el enlace a ESTE clon.
+# - Si el archivo queda vacío después (o solo con la cabecera), lo respalda y lo borra.
+# - Quita ~/.local/bin/mecanismo solo si es el enlace a ESTE clon. Va primero: así corre
+#   siempre, aunque el paso de CLAUDE.md fallara.
 # No toca los respaldos *.bak: quedan para quien los quiera.
 set -euo pipefail
 
@@ -13,32 +14,14 @@ AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIGEN="$AQUI/METODOLOGIA.md"
 DESTINO="$HOME/.claude/CLAUDE.md"
 IMPORT="@$ORIGEN"
+CABECERA="# Metodología compartida (metodo-claudio)"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+TMP="$DESTINO.tmp"
+# Nunca queda un .tmp, ni si algo falla a medias; y nunca se sale con error sin decirlo.
+trap 'rm -f "$TMP"' EXIT
+trap 'echo "metodo-claudio: desinstalar falló en la línea $LINENO" >&2' ERR
 
 echo "metodo-claudio: desinstalando"
-
-if [ ! -e "$DESTINO" ] && [ ! -L "$DESTINO" ]; then
-  echo "  no hay nada instalado en $DESTINO"
-
-elif [ -L "$DESTINO" ] && [ "$(readlink -f "$DESTINO")" = "$ORIGEN" ]; then
-  rm "$DESTINO"
-  echo "  enlace quitado: $DESTINO"
-
-elif [ -f "$DESTINO" ] && grep -qxF "$IMPORT" "$DESTINO"; then
-  # quita la línea @ y la cabecera que puso el instalador
-  grep -vxF "$IMPORT" "$DESTINO" | grep -vxF "# Metodología compartida (metodo-claudio)" > "$DESTINO.tmp"
-  # colapsa líneas vacías finales
-  sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$DESTINO.tmp"
-  if [ -s "$DESTINO.tmp" ] && grep -q '[^[:space:]]' "$DESTINO.tmp"; then
-    mv "$DESTINO.tmp" "$DESTINO"
-    echo "  importación quitada; tus reglas propias siguen en $DESTINO"
-  else
-    rm -f "$DESTINO.tmp" "$DESTINO"
-    echo "  importación quitada; el archivo quedó vacío y se borró"
-  fi
-
-else
-  echo "  $DESTINO no es nuestro: no se toca"
-fi
 
 BIN="$HOME/.local/bin/mecanismo"
 BIN_ORIGEN="$AQUI/mecanismo/bin/mecanismo"
@@ -49,6 +32,36 @@ elif [ -e "$BIN" ] || [ -L "$BIN" ]; then
   echo "  $BIN no apunta a este clon: no se toca"
 else
   echo "  no hay mecanismo en $BIN"
+fi
+
+if [ ! -e "$DESTINO" ] && [ ! -L "$DESTINO" ]; then
+  echo "  no hay nada instalado en $DESTINO"
+
+elif [ -L "$DESTINO" ] && [ "$(readlink -f "$DESTINO")" = "$ORIGEN" ]; then
+  rm "$DESTINO"
+  echo "  enlace quitado: $DESTINO"
+
+elif [ -f "$DESTINO" ] && grep -qxF "$IMPORT" "$DESTINO"; then
+  # Quita la línea @ y la cabecera que puso el instalador, y las líneas vacías finales.
+  # awk y no `grep -v | grep -v`: si no queda ninguna línea, grep sale 1 y, con
+  # pipefail, abortaba sin mensaje dejando el .tmp y la importación puesta.
+  IMPORT="$IMPORT" CABECERA="$CABECERA" awk '
+    $0 == ENVIRON["IMPORT"] || $0 == ENVIRON["CABECERA"] { next }
+    { l[++n] = $0; if ($0 ~ /[^ \t\r]/) u = n }
+    END { for (i = 1; i <= u; i++) print l[i] }
+  ' "$DESTINO" > "$TMP"
+  if [ -s "$TMP" ]; then
+    mv "$TMP" "$DESTINO"
+    echo "  importación quitada; tus reglas propias siguen en $DESTINO"
+  else
+    mv "$DESTINO" "$DESTINO.$STAMP.bak"
+    rm -f "$TMP"
+    echo "  importación quitada; el archivo no tenía nada más y se retiró"
+    echo "  respaldo:       $DESTINO.$STAMP.bak"
+  fi
+
+else
+  echo "  $DESTINO no es nuestro: no se toca"
 fi
 
 echo
