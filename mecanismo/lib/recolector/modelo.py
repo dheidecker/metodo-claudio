@@ -123,24 +123,23 @@ def _datos(out: dict) -> dict:
     return d
 
 
-def _cadenas(x):
-    """Cada texto de `datos`, campo a campo (en el JSON serializado un `\\n@app.route` parecería un correo)."""
+def redactado(x):
+    """Copia de `x` con cada texto pasado por comun.redactar, campo a campo (en el JSON serializado
+    un `\\n@app.route` parecería un correo)."""
     if isinstance(x, str):
-        yield x
-    elif isinstance(x, dict):
-        for v in x.values():
-            yield from _cadenas(v)
-    elif isinstance(x, list):
-        for v in x:
-            yield from _cadenas(v)
+        return comun.redactar(x)
+    if isinstance(x, dict):
+        return {k: redactado(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [redactado(v) for v in x]
+    return x
 
 
 def llamar(tarea: str, datos: dict, presupuesto: Presupuesto) -> dict:
-    """Una llamada. `datos` ya tiene que venir redactado: si redactar() lo cambiaría, no se envía."""
-    sucio = next((s for s in _cadenas(datos) if comun.redactar(s) != s), None)
-    if sucio is not None:
-        raise ErrorModelo("la entrada trae algo sin redactar: no se envía")
-    entrada = json.dumps(datos, ensure_ascii=False)
+    """Una llamada. `datos` debería venir ya redactado, pero lo que se ENVÍA se redacta siempre
+    aquí, campo a campo: un texto cortado después de redactar puede dejar a la vista algo que
+    redactar() todavía reconoce, y comprobar sin redactar tiraba el lote entero."""
+    entrada = json.dumps(redactado(datos), ensure_ascii=False)
     tope = presupuesto.tope(tarea)
     cwd = comun.estado_dir() / "vacio"
     cwd.mkdir(parents=True, exist_ok=True)

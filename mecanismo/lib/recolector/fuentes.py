@@ -1,4 +1,6 @@
 """Fuentes del recolector. Todo texto sale de aquí YA redactado (comun.redactar).
+Regla (CONTRATO §11): redactar ANTES de cortar, nunca `redactar(t[:n])`: un corte deja un PEM sin
+`-----END` o una DSN sin su `@`, y la redacción ya no los reconoce.
 
 - history.jsonl (`display`, sin comandos de barra ni `exit`).
 - Transcripts: solo prompts humanos (comun.es_prompt_humano) que no sean notificaciones inyectadas.
@@ -83,7 +85,7 @@ def de_history(dias: int | None) -> list[Muestra]:
         if not dia:
             continue
         ruta = e.get("project") or None
-        out.append(Muestra(comun.redactar(t[:MAX_TEXTO]), Path(ruta).name if ruta else "?", ruta, dia,
+        out.append(Muestra(comun.redactar(t)[:MAX_TEXTO], Path(ruta).name if ruta else "?", ruta, dia,
                            "history", e.get("sessionId")))
     return out
 
@@ -106,7 +108,7 @@ def de_transcripts(dias: int | None) -> list[Muestra]:
         if corte and dia < corte:
             continue
         cwd = e.get("cwd")
-        out.append(Muestra(comun.redactar(t[:MAX_TEXTO]),
+        out.append(Muestra(comun.redactar(t)[:MAX_TEXTO],
                            Path(cwd).name if cwd else _proyecto_de_carpeta(path.parent.name),
                            cwd, dia, "transcripts", e.get("sessionId")))
     return out
@@ -193,7 +195,7 @@ def de_gh(rutas: list[str], dias: int | None) -> list[Muestra]:
             cuerpo, dia = c.get("body"), (c.get("created_at") or "")[:10]
             if not isinstance(cuerpo, str) or not dia or (corte and dia < corte):
                 continue
-            out.append(Muestra(comun.redactar(cuerpo[:MAX_TEXTO]), Path(ruta).name, ruta, dia, "gh",
+            out.append(Muestra(comun.redactar(cuerpo)[:MAX_TEXTO], Path(ruta).name, ruta, dia, "gh",
                                f"gh:{repo}:{c.get('pull_request_url', '')}"))
     return out
 
@@ -209,7 +211,7 @@ _NUMERADA = re.compile(r"^\d+[.)]\s+(\S.*)")
 
 def _limpio(t: str) -> str:
     t = re.sub(r"\*\*|__", "", t).strip().rstrip(":")
-    return comun.redactar(t[:200])
+    return comun.redactar(t)[:200]
 
 
 def trampas_en_markdown(path: Path) -> list[dict]:
@@ -255,7 +257,7 @@ def trampas_en_markdown(path: Path) -> list[dict]:
         if actual is not None:
             actual["_c"].append(l)
     for it in items:
-        it["cuerpo"] = comun.redactar("\n".join(it.pop("_c")).strip()[:600])
+        it["cuerpo"] = comun.redactar("\n".join(it.pop("_c")).strip())[:600]
         it["archivo"] = str(path)
     return [it for it in items if it["titulo"]]
 
@@ -294,7 +296,7 @@ def encabezados(path: Path, niveles=(1, 2, 3), maximo: int = 80) -> list[str]:
             continue
         m = None if cerca else _ENC.match(l)
         if m and len(m.group(1)) in niveles:
-            out.append(comun.redactar(m.group(2)[:160]))
+            out.append(comun.redactar(m.group(2))[:160])
     return out[:maximo]
 
 

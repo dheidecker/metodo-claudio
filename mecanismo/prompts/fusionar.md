@@ -5,7 +5,8 @@ Eres el agrupador del recolector de `mecanismo`. Recibes por la entrada un JSON 
 - `documentado`: lo que ya está escrito: `metodologia` (títulos de METODOLOGIA.md), `claude_md`
   (títulos del CLAUDE.md de cada proyecto), `trampas` (trampas escritas por proyecto) y `git_log`
   (`git log --oneline` del repo de la metodología: `<sha> <mensaje>`).
-- `existentes`: propuestas ya abiertas `[{"id", "resumen"}]`.
+- `existentes`: propuestas que ya existen `[{"id", "resumen", "estado"}]` (pendientes y también las ya
+  aprobadas o rechazadas).
 
 Tarea: **fusiona las frases que significan lo mismo** en grupos. Una frase va a un solo grupo.
 Las frases sin pareja pueden quedar fuera. Por cada grupo devuelve:
@@ -16,7 +17,10 @@ Las frases sin pareja pueden quedar fuera. Por cada grupo devuelve:
 - `regla`: el párrafo (2–4 líneas) que habría que añadir a METODOLOGIA.md o al CLAUDE.md.
 - `documentada_sha`: si un commit de `git_log` ya escribió esta regla, su sha tal como aparece; si no, "".
 - `documentada_en`: si un título de `documentado` ya la cubre, ese título; si no, "".
-- `existente`: el `id` de `existentes` que es esta misma propuesta, o "".
+- `existente`: el `id` de `existentes` que trata de **lo mismo** que este grupo, aunque su resumen
+  esté redactado con otras palabras (p. ej. «Lanza subagentes en paralelo» y «Orquesta varios agentes
+  en paralelo» son la misma); si no hay ninguna, "". Es lo que mantiene estable el id entre corridas:
+  ante la duda entre una existente y ninguna, elige la existente. Cada id, a lo sumo en un grupo.
 - `mecanizable`: true solo si la regla se puede comprobar con una expresión regular sobre líneas
   de código de un proyecto (p. ej. «no uses EXCLUDED en upserts»). Reglas de conducta (delegar,
   verificar, comunicar) son false.

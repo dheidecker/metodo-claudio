@@ -80,6 +80,32 @@ class TestFuentesConEntorno(unittest.TestCase):
                           "responde en español por favor"])
         self.assertEqual({m.proyecto for m in ms}, {"sempat", "demo-web"})
 
+    def test_redacta_antes_de_cortar(self):
+        """Un corte en MAX_TEXTO justo antes de la `@` de una DSN o dentro de un PEM no deja ver nada."""
+        dsn = "postgres://app:CANARIOclave"
+        largo = "x " * 900
+        largo += "y" * (fuentes.MAX_TEXTO - len(largo) - len(dsn) - 1) + " " + dsn + "@db.interno:5432/prod"
+        self.assertEqual(largo.index("@"), fuentes.MAX_TEXTO)  # el corte cae justo antes de la @
+        pem = "clave: -----BEGIN RSA PRIVATE KEY-----\n" + "CANARIOabc+/\n" * 300 + "-----END RSA PRIVATE KEY-----"
+        h = pathlib.Path(os.environ["CLAUDE_HOME"]) / "history.jsonl"
+        with open(h, "a", encoding="utf-8") as f:
+            for i, t in enumerate((largo, pem)):
+                f.write(json.dumps({"display": t, "timestamp": int(__import__("time").time() * 1000),
+                                    "project": "/x/demo", "sessionId": f"corte-{i}"}) + "\n")
+        sesion = pathlib.Path(os.environ["CLAUDE_HOME"]) / "projects" / "-x-demo"
+        sesion.mkdir(parents=True)
+        (sesion / "s.jsonl").write_text(json.dumps({"type": "user", "origin": {"kind": "human"}, "cwd": "/x/demo",
+                                                    "message": {"role": "user", "content": largo}}) + "\n")
+        textos = [m.texto for m in fuentes.de_history(60) + fuentes.de_transcripts(60)]
+        self.assertFalse([t for t in textos if "CANARIO" in t])
+        self.assertEqual(sum(t.startswith("x x") and t.endswith("y [REDACTADO:dsn]") for t in textos), 2)
+        self.assertTrue(any(t == "clave: [REDACTADO:pem]" for t in textos))
+        self.assertTrue(all(len(t) <= fuentes.MAX_TEXTO for t in textos))
+        d = pathlib.Path(self.tmp / "md")
+        d.mkdir()
+        (d / "CLAUDE.md").write_text("## Trampas\n\n- **La base.** " + "z" * 560 + " " + dsn + "@h/db\n")
+        self.assertNotIn("CANARIO", json.dumps(fuentes.trampas_en_markdown(d / "CLAUDE.md")))
+
     def test_sin_duplicados_entre_history_y_transcript(self):
         ms = fuentes.sin_duplicados(fuentes.de_history(60) + fuentes.de_transcripts(60))
         esp = [m for m in ms if m.texto == "responde en español por favor"]

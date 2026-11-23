@@ -19,7 +19,8 @@ from tests.fixtures.recolector.armar import FAKE, armar
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 VARS = ("CLAUDE_HOME", "MECANISMO_HOME", "MECANISMO_BITACORA", "MECANISMO_CLAUDE", "MECANISMO_GH",
-        "CLAUDE_PROJECT_DIR", "FAKE_CLAUDE_LOG", "MECANISMO_PRESUPUESTO_USD", "MECANISMO_LOTE", "ANTHROPIC_API_KEY")
+        "CLAUDE_PROJECT_DIR", "FAKE_CLAUDE_LOG", "MECANISMO_PRESUPUESTO_USD", "MECANISMO_LOTE", "ANTHROPIC_API_KEY",
+        "FAKE_CLAUDE_VARIANTE")
 
 
 def motor_falso():
@@ -70,6 +71,14 @@ class Base(unittest.TestCase):
     def llamadas(self):
         p = self.tmp / "fake.log"
         return [json.loads(l) for l in p.read_text().splitlines()] if p.exists() else []
+
+    def agregar_history(self, filas):
+        """filas: [(texto, proyecto, sesion)] de hoy, al final de history.jsonl."""
+        import time
+        with open(self.tmp / "claude" / "history.jsonl", "a", encoding="utf-8") as f:
+            for texto, proy, sesion in filas:
+                f.write(json.dumps({"display": texto, "pastedContents": {}, "timestamp": int(time.time() * 1000),
+                                    "project": str(self.proy / proy), "sessionId": sesion}, ensure_ascii=False) + "\n")
 
     def sin_canario(self):
         rutas = [str(self.tmp / "mecanismo")] + [str(p) for p in self.proy.glob("*/.claude/trampas/propuestas")]
@@ -148,11 +157,33 @@ class TestRedaccion(Base):
         r = subprocess.run(args + ["--system-prompt", "CANARIO"], input="{}", capture_output=True, text=True)
         self.assertEqual(r.returncode, 3)
 
-    def test_llamar_no_envia_sin_redactar(self):
-        with self.assertRaises(modelo.ErrorModelo):
-            modelo.llamar("clasificar", {"tarea": "clasificar", "prompts": [{"i": 0, "texto": "sk-ant-CANARIOxxxxxxxx"}]},
-                          modelo.Presupuesto())
-        self.assertEqual(self.llamadas(), [])
+    def test_llamar_redacta_siempre_lo_que_envia(self):
+        # el fake sale con 3 si ve CANARIO: que responda prueba que llegó redactado
+        out = modelo.llamar("clasificar", {"tarea": "clasificar", "prompts": [
+            {"i": 0, "proyecto": "x", "texto": "sk-ant-CANARIOxxxxxxxx"},
+            {"i": 1, "proyecto": "x", "texto": "la base: postgres://u:CANARIO@db/prod"}]}, modelo.Presupuesto())
+        self.assertEqual(len(out["items"]), 2)
+        self.assertEqual(len(self.llamadas()), 1)
+
+    def test_pem_largo_y_dsn_en_el_corte(self):
+        """Redactar antes de cortar (CONTRATO §11): CANARIO no llega al fake, ni a la caché, ni a `ejemplos`."""
+        from lib.recolector import fuentes
+        pem = ("lanza agentes en paralelo con esta clave -----BEGIN RSA PRIVATE KEY-----\n"
+               + "CANARIOabcdefghij+/\n" * 170 + "-----END RSA PRIVATE KEY-----")
+        self.assertGreater(len(pem), 3000)
+        dsn = "postgres://app:CANARIOclave"
+        cabeza = "lanza agentes en paralelo, la base es"
+        corte = cabeza + " " * (fuentes.MAX_TEXTO - len(cabeza) - len(dsn)) + dsn
+        self.assertEqual(len(corte), fuentes.MAX_TEXTO)  # el corte cae justo antes de la @
+        self.agregar_history([(pem, "sitio", "red-pem"), (corte + "@db.interno:5432/prod", "crm", "red-dsn")])
+        code, r = self.recolectar_json()
+        self.assertEqual(code, 0, r["errores"])  # el fake sale con 3 si ve CANARIO
+        par = next(p for p in r["propuestas"] if "paralelo" in p["resumen"].lower())
+        ej = par["evidencia"]["ejemplos"]
+        self.assertIn("lanza agentes en paralelo con esta clave [REDACTADO:pem]", ej)
+        self.assertIn("lanza agentes en paralelo, la base es [REDACTADO:dsn]", ej)
+        self.sin_canario()  # propuestas y caché
+        self.assertTrue(list((self.tmp / "mecanismo" / "cache").glob("*.json")))
 
     def test_decorador_no_es_correo(self):
         # en el JSON serializado "\n@app.route" parecería un correo: el control va campo a campo
@@ -166,6 +197,52 @@ class TestRedaccion(Base):
         self.sin_canario()
         for c in (self.tmp / "mecanismo" / "cache").glob("*.json"):
             self.assertNotIn("CANARIO", c.read_text())
+
+
+class TestIdsEstables(Base):
+    """En tres corridas reales «orquesta varios agentes en paralelo» salió con tres ids distintos:
+    el mismo grupo con otra redacción tiene que actualizar la propuesta existente (CONTRATO §11)."""
+
+    def paralelas(self):
+        out = {}
+        for f in (self.tmp / "mecanismo" / "propuestas").glob("*.yml"):
+            p = comun.leer_yaml(f)
+            if "paralel" in p["resumen"].lower():
+                out[p["id"]] = p
+        return out
+
+    def dos_corridas(self, variante):
+        code, r = self.recolectar_json()
+        self.assertEqual(code, 0, r["errores"])
+        antes = self.paralelas()
+        self.assertEqual(len(antes), 1)
+        shutil.rmtree(self.tmp / "mecanismo" / "cache")  # que el modelo vuelva a redactarlo todo
+        os.environ["FAKE_CLAUDE_VARIANTE"] = variante
+        code, r = self.recolectar_json()
+        self.assertEqual(code, 0, r["errores"])
+        fus = [l for l in self.llamadas() if l["tarea"] == "fusionar"]
+        self.assertEqual(len(fus), 2)
+        despues = self.paralelas()
+        self.assertEqual(list(despues), list(antes))  # una sola propuesta, mismo id
+        p = next(iter(despues.values()))
+        self.assertEqual(p["resumen"], "Paraleliza el trabajo entre agentes")  # se actualizó la existente
+        self.assertEqual(next(x for x in r["propuestas"] if x["id"] == p["id"])["accion"], "actualizada")
+
+    def test_fusion_devuelve_el_existente(self):
+        self.dos_corridas("1")
+
+    def test_sin_existente_la_reconoce_por_sus_ejemplos(self):
+        self.dos_corridas("2")
+
+    def test_un_id_existente_no_lo_toman_dos_grupos(self):
+        g = lambda r, txt: types.SimpleNamespace(existente="x-1", resumen=r, muestras=[types.SimpleNamespace(texto=txt)])
+        existentes = {"x-1": {"origen": "recolector", "resumen": "algo", "evidencia": {"ejemplos": []}}}
+        tomados = set()
+        a = proponer._id_estable(g("uno", "a"), existentes, tomados)
+        tomados.add(a)
+        b = proponer._id_estable(g("dos", "b"), existentes, tomados)
+        self.assertEqual(a, "x-1")
+        self.assertNotEqual(b, "x-1")
 
 
 class TestPresupuesto(Base):
@@ -221,6 +298,20 @@ class TestTrampas(Base):
         self.assertEqual(hook["contenido"]["trampa"]["nivel"], "aviso")
         self.assertEqual(pathlib.Path(hook["ruta"]).parent, self.proy / "sepa-mcp" / ".claude" / "trampas" / "propuestas")
 
+    def test_en_el_repo_solo_ejemplos_del_proyecto(self):
+        """Una propuesta que se escribe en <proyecto>/.claude/trampas/propuestas/ (versionable) no lleva
+        prompts de otro proyecto en `ejemplos`."""
+        self.agregar_history([("otra vez EXCLUDED en el upsert de tickets-secreto", "tickets", "exc-t")])
+        with mock.patch.dict(sys.modules, motor_falso()):
+            code, r = self.recolectar_json()
+        self.assertEqual(code, 0, r["errores"])
+        hook = next(p for p in r["propuestas"] if p["tipo"] == "subir-a-hook")
+        self.assertEqual(pathlib.Path(hook["ruta"]).parent, self.proy / "sepa-mcp" / ".claude" / "trampas" / "propuestas")
+        self.assertEqual(hook["evidencia"]["ocurrencias"], 5)  # cuenta todas
+        self.assertEqual(hook["evidencia"]["ejemplos"], ["otra vez EXCLUDED en el upsert, usa parámetros"])
+        for f in (self.proy / "sepa-mcp" / ".claude" / "trampas" / "propuestas").glob("*.yml"):
+            self.assertNotIn("tickets-secreto", f.read_text())
+
     def test_sin_motor_queda_sin_validar(self):
         with mock.patch.object(proponer, "_probar", return_value=None):
             _, r = self.recolectar_json()
@@ -245,6 +336,84 @@ class TestBitacora(Base):
         os.utime(self.proy / "demo-web" / ".claude" / "trampas" / "blade.yml")
         _, out = self.correr("--fuente", "bitacora", "--dias", "60", "--json")
         self.assertNotIn("podar", {p["tipo"] for p in json.loads(out)["propuestas"]})
+
+
+class TestSubirPuerta(Base):
+    """`subir-puerta` (CONTRATO §11) con una bitácora sintética de stop-evidencia y verificar."""
+
+    def setUp(self):
+        super().setUp()
+        import datetime as dt
+        self.hoy = dt.date.today()
+        self.dt = dt
+        for n in ("demo-web", "tickets", "crm", "sempat"):
+            c = self.proy / n / ".claude"
+            c.mkdir(parents=True, exist_ok=True)
+            (c / "mecanismo.yml").write_text("version: 1\ntipo: lib\npuerta: aviso\nlib: {tests: x}\n")
+
+    def dia(self, d):
+        return (self.hoy - self.dt.timedelta(days=d)).isoformat()
+
+    def escribir(self, lineas):
+        txt = "".join("%s | %-22s | %-32s | %s\n" % l for l in lineas)
+        with open(self.tmp / "bitacora.log", "a", encoding="utf-8") as f:
+            f.write(txt)
+
+    def test_propone_solo_si_todos_los_avisos_se_atendieron(self):
+        ls = []
+        for d in range(1, 15):  # 14 días
+            ls += [(f"{self.dia(d)} 10:00:00", "stop-evidencia", "demo-web", "AVISO consultar,parser"),
+                   (f"{self.dia(d)} 10:05:00", "verificar", "demo-web", "ok consultar"),
+                   (f"{self.dia(d)} 10:06:00", "verificar", "demo-web", "ok parser"),
+                   # tickets: igual, pero un día el verificar no cubre todas las funciones del aviso
+                   (f"{self.dia(d)} 11:00:00", "stop-evidencia", "tickets", "AVISO a,b"),
+                   (f"{self.dia(d)} 11:05:00", "verificar", "tickets", "ok a" if d == 7 else "ok a,b"),
+                   # sempat: un día el verificar llega al día siguiente
+                   (f"{self.dia(d)} 23:00:00", "stop-evidencia", "sempat", "AVISO x")]
+            if d != 3:
+                ls.append((f"{self.dia(d)} 23:30:00", "verificar", "sempat", "ok x"))
+            else:
+                ls.append((f"{self.dia(d - 1)} 00:10:00", "verificar", "sempat", "ok x"))
+        for d in range(1, 14):  # crm: 13 días, todos atendidos: aún no
+            ls += [(f"{self.dia(d)} 12:00:00", "stop-evidencia", "crm", "AVISO f"),
+                   (f"{self.dia(d)} 12:01:00", "verificar", "crm", "AVISO f"),  # falló: no cuenta…
+                   (f"{self.dia(d)} 12:02:00", "verificar", "crm", "ok f")]     # …este sí
+        self.escribir(ls)
+        conf = self.proy / "demo-web" / ".claude" / "mecanismo.yml"
+        antes = conf.read_text()
+        code, out = self.correr("--fuente", "bitacora", "--dias", "60", "--json")
+        self.assertEqual(code, 0)
+        ps = [p for p in json.loads(out)["propuestas"] if p["tipo"] == "subir-puerta"]
+        self.assertEqual([p["evidencia"]["proyectos"] for p in ps], [["demo-web"]])
+        p = ps[0]
+        self.assertEqual((p["destino"], p["origen"]), ("proyecto", "bitacora"))
+        self.assertEqual((p["evidencia"]["ocurrencias"], p["evidencia"]["dias"]), (14, 14))
+        self.assertEqual(p["contenido"]["archivo"], str(conf))
+        self.assertIn("-puerta: aviso\n+puerta: bloqueo", p["contenido"]["diff"])
+        self.assertTrue(pathlib.Path(p["ruta"]).is_relative_to(self.tmp / "mecanismo" / "propuestas"))
+        self.assertEqual(conf.read_text(), antes)
+        esquema = json.loads((RAIZ / "esquemas" / "propuesta.schema.json").read_text())
+        doc = comun.leer_yaml(p["ruta"])
+        self.assertLessEqual(set(doc), set(esquema["properties"]))
+        self.assertEqual(self.llamadas(), [])
+
+    def test_un_aviso_sin_atender_o_puerta_ya_en_bloqueo(self):
+        ls = []
+        for d in range(1, 16):
+            ls += [(f"{self.dia(d)} 10:00:00", "stop-evidencia", "demo-web", "AVISO f"),
+                   (f"{self.dia(d)} 10:05:00", "verificar", "demo-web", "ok f")]
+        ls.append((f"{self.dia(0)} 09:00:00", "stop-evidencia", "demo-web", "AVISO f"))  # hoy, sin verificar
+        self.escribir(ls)
+        _, out = self.correr("--fuente", "bitacora", "--dias", "60", "--json")
+        self.assertNotIn("subir-puerta", {p["tipo"] for p in json.loads(out)["propuestas"]})
+        self.escribir([(f"{self.dia(0)} 09:10:00", "verificar", "demo-web", "ok f")])
+        _, out = self.correr("--fuente", "bitacora", "--dias", "60", "--json")
+        self.assertIn("subir-puerta", {p["tipo"] for p in json.loads(out)["propuestas"]})
+        conf = self.proy / "demo-web" / ".claude" / "mecanismo.yml"
+        conf.write_text(conf.read_text().replace("puerta: aviso", "puerta: bloqueo"))
+        shutil.rmtree(self.tmp / "mecanismo" / "propuestas")
+        _, out = self.correr("--fuente", "bitacora", "--dias", "60", "--json")
+        self.assertNotIn("subir-puerta", {p["tipo"] for p in json.loads(out)["propuestas"]})
 
 
 class TestSinModelo(Base):

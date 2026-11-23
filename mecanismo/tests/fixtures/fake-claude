@@ -6,6 +6,9 @@
 - Lee por stdin el JSON de datos ({"tarea": clasificar|fusionar|trampas, ...}) y responde con un
   "modelo" de palabras clave pensado para tests/fixtures/recolector/.
 - Si FAKE_CLAUDE_LOG está definida, anota una línea JSON por llamada (tarea, modelo, tope, n).
+- FAKE_CLAUDE_VARIANTE simula que el modelo redacta distinto en otra corrida (ids estables, §11):
+  `1` = otras canónicas y otro resumen para «paralelo», pero devuelve `existente` como pide el prompt;
+  `2` = lo mismo, pero NO devuelve `existente` (el recolector tiene que reconocerla por sus ejemplos).
 """
 import json
 import os
@@ -49,11 +52,17 @@ TRAMPA_EXCLUDED = {
 }
 
 
+VARIANTE = os.environ.get("FAKE_CLAUDE_VARIANTE", "")
+
+
 def clasificar(p):
     t = p["texto"]
     for rx, alcance, canonica in CLASES:
         if re.search(rx, t):
-            if canonica is None:  # dos redacciones distintas: la fusión tiene que juntarlas
+            if canonica is None and VARIANTE:
+                canonica = ("Usa subagentes a la vez, en paralelo" if "subagente" in t.lower()
+                            else "Trabaja con agentes en paralelo")
+            elif canonica is None:  # dos redacciones distintas: la fusión tiene que juntarlas
                 canonica = ("Lanza subagentes en paralelo" if "subagente" in t.lower()
                             else "Orquesta varios agentes en paralelo")
             return {"i": p["i"], "canonica": canonica, "alcance": alcance}
@@ -71,12 +80,16 @@ def fusionar(d):
     out = []
     for clave, fs in grupos.items():
         resumen = "Orquesta varios agentes en paralelo" if clave == "paralelo" else fs[0]["frase"]
+        existente = existentes.get(resumen, "")
+        if clave == "paralelo" and VARIANTE:
+            resumen = "Paraleliza el trabajo entre agentes"
+            existente = next((i for r, i in existentes.items() if "paralel" in r.lower()), "") if VARIANTE == "1" else ""
         sha = next((l.split()[0] for l in doc.get("git_log", []) if clave == "paralelo" and "paralel" in l), "")
         doc_en = next((t for t in titulos_trampas if "EXCLUDED" in resumen and "EXCLUDED" in t), "")
         mec = "EXCLUDED" in resumen
         out.append({"resumen": resumen, "miembros": [f["i"] for f in fs], "alcance": fs[0]["alcance"],
                     "regla": f"{resumen}. (regla propuesta por el fake)", "documentada_sha": sha,
-                    "documentada_en": doc_en, "existente": existentes.get(resumen, ""),
+                    "documentada_en": doc_en, "existente": existente,
                     "mecanizable": mec, "trampa": dict(TRAMPA_EXCLUDED) if mec else None})
     return {"grupos": out}
 
