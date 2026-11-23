@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Dispatcher de mecanismo (CONTRATO §2). Lo enlaza instalar.sh en ~/.local/bin/mecanismo.
+# Resuelve su ruta real, pone mecanismo/ en PYTHONPATH y llama lib/<x>/cli.py:main(argv).
+# Exit: 0 ok · 1 comprobación falló · 2 uso incorrecto · 3 falta TTY · 4 falta python3/PyYAML.
+set -uo pipefail
+
+YO="$(readlink -f "${BASH_SOURCE[0]}")"
+RAIZ="$(cd "$(dirname "$YO")/.." && pwd)"
+export PYTHONPATH="$RAIZ${PYTHONPATH:+:$PYTHONPATH}"
+
+uso() {
+  cat <<'USO'
+uso: mecanismo <subcomando> [args]
+
+  trampas      --probar [dir] | --archivo F | --arbol [--sid S]
+  recolectar   --fuente history|transcripts|bitacora|gh|claudemd|todas [--dias N] [--sin-modelo]
+  propuestas   [ver ID]               lista las propuestas pendientes
+  aprobar ID   / rechazar ID          exige una terminal (TTY): lo decide una persona
+  verificar    [--funciones a,b]      deja evidencia en .claude/evidencia/
+  permisos     [--dias N] [--json]
+  init         --tipo mcp|web|lib [dir]
+  hook <nombre> [args]                lo que llaman los shims; stdin = JSON del hook
+  version | --help
+
+Exit: 0 ok · 1 comprobación falló · 2 uso · 3 falta TTY · 4 falta python3/PyYAML.
+USO
+}
+
+# Misma bitácora que los hooks bash y que comun.bitacora (respeta los mismos overrides).
+bitacora() {
+  local log="${MECANISMO_BITACORA:-${CLAUDE_HOME:-$HOME/.claude}/metodo-claudio.log}"
+  printf '%s | %-22s | %-32s | %s\n' "$(date '+%F %T')" "$1" "$(basename "${CLAUDE_PROJECT_DIR:-$PWD}")" "$2" >> "$log" 2>/dev/null || true
+}
+
+[ $# -gt 0 ] || { uso >&2; exit 2; }
+sub="$1"; shift
+
+case "$sub" in
+  -h|--help|help) uso; exit 0 ;;
+  version|--version)
+    rev="$(git -C "$RAIZ" rev-parse --short HEAD 2>/dev/null || echo sin-git)"
+    echo "mecanismo $rev (contrato v1) en $RAIZ"; exit 0 ;;
+
+  hook)
+    # Un hook nunca rompe la sesión por un problema de instalación: avisa en la bitácora y sale 0.
+    nombre="${1:-}"; [ $# -gt 0 ] && shift
+    if ! [[ "$nombre" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+      echo "mecanismo hook: nombre inválido '${nombre}'" >&2; exit 2
+    fi
+    if [ ! -f "$RAIZ/hooks/$nombre" ]; then
+      bitacora "$nombre" "error falta mecanismo/hooks/$nombre"; exit 0
+    fi
+    command -v python3 >/dev/null 2>&1 || { bitacora "$nombre" "error falta python3"; exit 0; }
+    exec python3 "$RAIZ/hooks/$nombre" "$@" ;;
+
+  trampas)              pkg=trampas ;;
+  recolectar)           pkg=recolector ;;
+  propuestas)           pkg=propuestas ;;               # main([]) lista · main(["ver", ID])
+  aprobar|rechazar)     pkg=propuestas; set -- "$sub" "$@" ;;   # main(["aprobar", ID])
+  verificar)            pkg=evidencia ;;
+  permisos)             pkg=permisos ;;
+  init)                 pkg=init ;;
+  *) echo "mecanismo: subcomando desconocido '$sub'" >&2; uso >&2; exit 2 ;;
+esac
+
+if [ ! -f "$RAIZ/lib/$pkg/cli.py" ]; then
+  echo "mecanismo $sub: el paquete lib/$pkg todavía no existe en este clon ($RAIZ)." >&2
+  echo "  ¿un 'git pull' pendiente, o el frente que lo escribe aún no se integró?" >&2
+  exit 2
+fi
+command -v python3 >/dev/null 2>&1 || { echo "mecanismo: falta python3 (3.12 o más)" >&2; exit 4; }
+# -P: no anteponer el directorio actual a sys.path. Sin esto, un proyecto con su propio
+# lib/__init__.py taparía nuestro paquete `lib` al correr mecanismo desde su raíz.
+python3 -P -c 'import yaml' 2>/dev/null || { echo "mecanismo: falta PyYAML — instala python3-yaml (apt install python3-yaml)" >&2; exit 4; }
+
+exec python3 -P -c 'import sys; from lib.'"$pkg"'.cli import main; sys.exit(main(sys.argv[1:]))' "$@"

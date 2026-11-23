@@ -5,6 +5,7 @@
 # - Si es un archivo del usuario con nuestra línea @, quita solo esa línea
 #   (y su cabecera). Las reglas propias del usuario quedan intactas.
 # - Si el archivo queda vacío después, lo borra.
+# - Quita ~/.local/bin/mecanismo solo si es el enlace a ESTE clon.
 # No toca los respaldos *.bak: quedan para quien los quiera.
 set -euo pipefail
 
@@ -37,6 +38,17 @@ elif [ -f "$DESTINO" ] && grep -qxF "$IMPORT" "$DESTINO"; then
 
 else
   echo "  $DESTINO no es nuestro: no se toca"
+fi
+
+BIN="$HOME/.local/bin/mecanismo"
+BIN_ORIGEN="$AQUI/mecanismo/bin/mecanismo"
+if [ -L "$BIN" ] && [ "$(readlink "$BIN")" = "$BIN_ORIGEN" ]; then
+  rm "$BIN"
+  echo "  enlace quitado: $BIN"
+elif [ -e "$BIN" ] || [ -L "$BIN" ]; then
+  echo "  $BIN no apunta a este clon: no se toca"
+else
+  echo "  no hay mecanismo en $BIN"
 fi
 
 echo
