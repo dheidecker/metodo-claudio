@@ -1,0 +1,1 @@
+Proyecto de fixture: un servidor MCP con saludar y sumar.

@@ -1,0 +1,5 @@
+# Formato de mcp-sempat/testdata/golden/casos.yaml: `mcp` son los argumentos de la tool.
+{"casos": [
+{"nombre": "saludar_ana", "descripcion": "saludo simple; query_id es volátil",
+ "mcp": {"nombre": "Ana"}, "divergencias": []}
+]}

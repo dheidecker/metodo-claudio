@@ -1,0 +1,9 @@
+# Proyecto de fixture del frente C. Los tests sustituyen @SERVIDOR@ por la ruta absoluta de
+# tests/fixtures/mcp/servidor.py (o cambian `comando` por `url` para probar HTTP).
+version: 1
+tipo: mcp
+puerta: aviso
+mcp:
+  comando: "python3 @SERVIDOR@ --modo ok"
+  golden: .claude/verificacion/golden
+  ignorar: [query_id, request_id]

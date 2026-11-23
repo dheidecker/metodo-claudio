@@ -1,0 +1,14 @@
+{
+  "content": [
+    {
+      "text": {
+        "meta": {
+          "version": "1"
+        },
+        "resultado": 5
+      },
+      "type": "text"
+    }
+  ],
+  "isError": false
+}
