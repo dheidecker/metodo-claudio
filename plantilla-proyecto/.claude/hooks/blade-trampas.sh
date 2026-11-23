@@ -19,7 +19,7 @@ set -uo pipefail
 # «si en un mes no disparó, se revisa» no se puede aplicar porque nadie lo sabe.
 bitacora(){ printf '%s | %-22s | %-32s | %s\n' "$(date '+%F %T')" "$1" "$(basename "${CLAUDE_PROJECT_DIR:-$PWD}")" "$2" >> "$HOME/.claude/metodo-claudio.log" 2>/dev/null || true; }
 IN="$(cat)"
-if command -v mecanismo >/dev/null 2>&1; then
+if command -v mecanismo >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then  # sin PyYAML mecanismo sale mudo: mejor el bash
   raiz="${CLAUDE_PROJECT_DIR:-}"
   if [ -z "$raiz" ]; then
     cwd="$(jq -r '.cwd // empty' <<<"$IN" 2>/dev/null)"; cwd="${cwd:-$PWD}"
