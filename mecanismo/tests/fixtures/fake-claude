@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""`claude -p --output-format json` falso y determinista para los tests del recolector (frente B).
+
+- Falla (exit 3) si ve CANARIO en argv o en stdin: demuestra que se redacta ANTES de enviar.
+- Exige -p, --output-format json, --json-schema, --model y --max-budget-usd (exit 2 si falta).
+- Lee por stdin el JSON de datos ({"tarea": clasificar|fusionar|trampas, ...}) y responde con un
+  "modelo" de palabras clave pensado para tests/fixtures/recolector/.
+- Si FAKE_CLAUDE_LOG está definida, anota una línea JSON por llamada (tarea, modelo, tope, n).
+"""
+import json
+import os
+import re
+import sys
+
+argv = sys.argv[1:]
+entrada = sys.stdin.read()
+if "CANARIO" in entrada or any("CANARIO" in a for a in argv):
+    print("fake-claude: CANARIO sin redactar en la entrada", file=sys.stderr)
+    sys.exit(3)
+
+
+def valor(flag):
+    return argv[argv.index(flag) + 1] if flag in argv and argv.index(flag) + 1 < len(argv) else None
+
+
+faltan = [f for f in ("--json-schema", "--model", "--max-budget-usd") if valor(f) is None]
+if "-p" not in argv or valor("--output-format") != "json" or faltan:
+    print(f"fake-claude: uso incorrecto, faltan {faltan}", file=sys.stderr)
+    sys.exit(2)
+json.loads(valor("--json-schema"))
+tope = float(valor("--max-budget-usd"))
+
+datos = json.loads(entrada)
+tarea = datos.get("tarea")
+
+CLASES = [
+    (r"(?i)(paralel|a la vez|simult)", "metodologia", None),
+    (r"(?i)(salida de (las )?pruebas|evidencia de (los )?tests|muestra.*pruebas)", "metodologia",
+     "Muestra la salida de las pruebas antes de dar por terminado"),
+    (r"EXCLUDED", "proyecto", "No uses EXCLUDED en los upserts"),
+    (r"(?i)responde.*español", "metodologia", "Responde siempre en español"),
+    (r"(?i)commit.*cort", "metodologia", "Escribe mensajes de commit cortos"),
+]
+TRAMPA_EXCLUDED = {
+    "id": "upsert-excluded", "globs": ["**/*.go", "**/*.sql"], "patron": r"EXCLUDED\.", "excepto": "",
+    "mensaje": "Upsert con EXCLUDED.col exige SELECT sobre col: usa parámetros.",
+    "prueba": {"dispara": "ON CONFLICT (id) DO UPDATE SET n = EXCLUDED.n",
+               "no_dispara": "ON CONFLICT (id) DO UPDATE SET n = $2"},
+}
+
+
+def clasificar(p):
+    t = p["texto"]
+    for rx, alcance, canonica in CLASES:
+        if re.search(rx, t):
+            if canonica is None:  # dos redacciones distintas: la fusión tiene que juntarlas
+                canonica = ("Lanza subagentes en paralelo" if "subagente" in t.lower()
+                            else "Orquesta varios agentes en paralelo")
+            return {"i": p["i"], "canonica": canonica, "alcance": alcance}
+    return {"i": p["i"], "canonica": "", "alcance": "ninguno"}
+
+
+def fusionar(d):
+    grupos = {}
+    for f in d["frases"]:
+        clave = "paralelo" if "paralelo" in f["frase"] else f["frase"]
+        grupos.setdefault(clave, []).append(f)
+    doc = d.get("documentado") or {}
+    titulos_trampas = [t for lista in (doc.get("trampas") or {}).values() for t in lista]
+    existentes = {e["resumen"]: e["id"] for e in d.get("existentes") or []}
+    out = []
+    for clave, fs in grupos.items():
+        resumen = "Orquesta varios agentes en paralelo" if clave == "paralelo" else fs[0]["frase"]
+        sha = next((l.split()[0] for l in doc.get("git_log", []) if clave == "paralelo" and "paralel" in l), "")
+        doc_en = next((t for t in titulos_trampas if "EXCLUDED" in resumen and "EXCLUDED" in t), "")
+        mec = "EXCLUDED" in resumen
+        out.append({"resumen": resumen, "miembros": [f["i"] for f in fs], "alcance": fs[0]["alcance"],
+                    "regla": f"{resumen}. (regla propuesta por el fake)", "documentada_sha": sha,
+                    "documentada_en": doc_en, "existente": existentes.get(resumen, ""),
+                    "mecanizable": mec, "trampa": dict(TRAMPA_EXCLUDED) if mec else None})
+    return {"grupos": out}
+
+
+def trampas(d):
+    out = []
+    for it in d["documentadas"]:
+        if "EXCLUDED" in it["titulo"]:
+            out.append(dict(TRAMPA_EXCLUDED, i=it["i"], id="excluded-en-upsert"))
+        elif "ransacción" in it["titulo"]:
+            # su propio caso `dispara` NO dispara: el recolector tiene que descartarla
+            out.append({"i": it["i"], "id": "tx-con-llamada-externa", "globs": ["**/*.go"],
+                        "patron": r"\.Begin\(", "excepto": "", "mensaje": "Transacción abierta durante una llamada externa.",
+                        "prueba": {"dispara": "x := 1", "no_dispara": "y := 2"}})
+    return {"trampas": out}
+
+
+if tarea == "clasificar":
+    res = {"items": [clasificar(p) for p in datos["prompts"]]}
+    n = len(datos["prompts"])
+elif tarea == "fusionar":
+    res = fusionar(datos)
+    n = len(datos["frases"])
+elif tarea == "trampas":
+    res = trampas(datos)
+    n = len(datos["documentadas"])
+else:
+    print(f"fake-claude: tarea desconocida {tarea!r}", file=sys.stderr)
+    sys.exit(2)
+
+if os.environ.get("FAKE_CLAUDE_LOG"):
+    with open(os.environ["FAKE_CLAUDE_LOG"], "a", encoding="utf-8") as f:
+        f.write(json.dumps({"tarea": tarea, "modelo": valor("--model"), "tope": tope, "n": n,
+                            "bare": "--bare" in argv, "tools": valor("--tools")}) + "\n")
+
+print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": json.dumps(res),
+                  "structured_output": res, "total_cost_usd": 0.01, "session_id": "fake"}))

@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["i", "canonica", "alcance"],
+        "properties": {
+          "i": {"type": "integer"},
+          "canonica": {"type": "string"},
+          "alcance": {"enum": ["metodologia", "proyecto", "ninguno"]}
+        }
+      }
+    }
+  }
+}

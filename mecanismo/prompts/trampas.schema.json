@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "required": ["trampas"],
+  "properties": {
+    "trampas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["i", "id", "globs", "patron", "excepto", "mensaje", "prueba"],
+        "properties": {
+          "i": {"type": "integer"},
+          "id": {"type": "string"},
+          "globs": {"type": "array", "items": {"type": "string"}},
+          "patron": {"type": "string"},
+          "excepto": {"type": "string"},
+          "mensaje": {"type": "string"},
+          "prueba": {
+            "type": "object",
+            "required": ["dispara", "no_dispara"],
+            "properties": {"dispara": {"type": "string"}, "no_dispara": {"type": "string"}}
+          }
+        }
+      }
+    }
+  }
+}

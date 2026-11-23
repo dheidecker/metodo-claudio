@@ -1,0 +1,21 @@
+- id: blade-sin-escapar
+  nivel: aviso
+  globs: ["resources/views/**/*.blade.php"]
+  patron: '\{!!'
+  mensaje: "Salida sin escapar en Blade."
+  origen: "fixture"
+  prueba: {dispara: "{!! $x !!}", no_dispara: "{{ $x }}"}
+- id: otra-no-corregida
+  nivel: aviso
+  globs: ["**/*.php"]
+  patron: 'dd\('
+  mensaje: "dd() olvidado."
+  origen: "fixture"
+  prueba: {dispara: "dd($x);", no_dispara: "logger($x);"}
+- id: vieja-sin-uso
+  nivel: aviso
+  globs: ["**/*.php"]
+  patron: 'mysql_query\('
+  mensaje: "API vieja."
+  origen: "fixture"
+  prueba: {dispara: "mysql_query($q);", no_dispara: "DB::select($q);"}

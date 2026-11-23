@@ -1,0 +1,214 @@
+# history.jsonl de prueba: `hace` = días antes de hoy. Lo arma tests/fixtures/recolector/armar.py.
+# Los secretos con CANARIO tienen que llegar redactados a todo lo que se escriba o se envíe.
+- texto: lanza varios agentes en paralelo para revisar esto
+  proyecto: sempat
+  hace: 52
+  sesion: par-0
+- texto: orquesta subagentes en paralelo, uno por frente
+  proyecto: mcp-sempat
+  hace: 50
+  sesion: par-1
+- texto: usa agentes a la vez, no uno tras otro
+  proyecto: sepa-mcp
+  hace: 47
+  sesion: par-2
+- texto: 'otra vez: paraleliza con subagentes'
+  proyecto: demo-web
+  hace: 45
+  sesion: par-3
+- texto: ¿por qué no lo hiciste en paralelo con varios agentes?
+  proyecto: tickets
+  hace: 41
+  sesion: par-4
+- texto: reparte en agentes simultáneos
+  proyecto: crm
+  hace: 38
+  sesion: par-5
+- texto: lanza agentes en paralelo; el token es eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJDQU5BUklPIn0.CANARIOabc
+  proyecto: metodo-x
+  hace: 35
+  sesion: par-6
+- texto: en paralelo, y usa la clave sk-ant-api03-CANARIOxxxxxxxx
+  proyecto: sitio
+  hace: 33
+  sesion: par-7
+- texto: paraleliza con agentes; el PAT es ghp_CANARIO1234567890abcdef
+  proyecto: informes
+  hace: 30
+  sesion: par-8
+- texto: 'a la vez con agentes: curl -H ''Authorization: Bearer CANARIOabc.def-123'''
+  proyecto: sempat
+  hace: 27
+  sesion: par-9
+- texto: agentes en paralelo, token 42|CANARIOabcdefghijklmnop
+  proyecto: mcp-sempat
+  hace: 24
+  sesion: par-10
+- texto: en paralelo contra postgres://app:CANARIO-pass@db.interno:5432/sepa
+  proyecto: sepa-mcp
+  hace: 21
+  sesion: par-11
+- texto: 'pega esto y lanza agentes en paralelo
+
+    -----BEGIN PRIVATE KEY-----
+
+    CANARIO
+
+    MIIE
+
+    -----END PRIVATE KEY-----'
+  proyecto: demo-web
+  hace: 18
+  sesion: par-12
+- texto: avisa a canario.CANARIO@ejemplo.cl y usa agentes en paralelo
+  proyecto: tickets
+  hace: 14
+  sesion: par-13
+- texto: 'no esperes: subagentes en paralelo'
+  proyecto: crm
+  hace: 10
+  sesion: par-14
+- texto: dos frentes independientes, agentes a la vez
+  proyecto: metodo-x
+  hace: 6
+  sesion: par-15
+- texto: hazlo con subagentes en paralelo como te dije
+  proyecto: sitio
+  hace: 0
+  sesion: par-16
+- texto: en paralelo, por favor, varios agentes
+  proyecto: informes
+  hace: 52
+  sesion: par-17
+- texto: investiga y arregla a la vez con dos agentes
+  proyecto: sempat
+  hace: 50
+  sesion: par-18
+- texto: lanza los agentes en paralelo en el mismo mensaje
+  proyecto: mcp-sempat
+  hace: 47
+  sesion: par-19
+- texto: paralelo, no en serie
+  proyecto: sepa-mcp
+  hace: 45
+  sesion: par-20
+- texto: agentes simultáneos para cada repo
+  proyecto: demo-web
+  hace: 41
+  sesion: par-21
+- texto: en paralelo otra vez
+  proyecto: tickets
+  hace: 38
+  sesion: par-22
+- texto: subagentes en paralelo, que no se pisen
+  proyecto: crm
+  hace: 35
+  sesion: par-23
+- texto: muestra la salida de las pruebas antes de decir que está listo
+  proyecto: sempat
+  hace: 40
+  sesion: pru-0
+- texto: ¿y la evidencia de los tests?
+  proyecto: mcp-sempat
+  hace: 31
+  sesion: pru-1
+- texto: sin la salida de pruebas no está terminado
+  proyecto: sepa-mcp
+  hace: 22
+  sesion: pru-2
+- texto: muestra las pruebas corriendo
+  proyecto: demo-web
+  hace: 15
+  sesion: pru-3
+- texto: otra vez sin la salida de las pruebas
+  proyecto: sempat
+  hace: 8
+  sesion: pru-4
+- texto: evidencia de tests, no afirmaciones
+  proyecto: mcp-sempat
+  hace: 2
+  sesion: pru-5
+- texto: muestra la salida de pruebas
+  proyecto: sepa-mcp
+  hace: 40
+  sesion: pru-6
+- texto: salida de pruebas, siempre
+  proyecto: demo-web
+  hace: 31
+  sesion: pru-7
+- texto: otra vez EXCLUDED en el upsert, usa parámetros
+  proyecto: sepa-mcp
+  hace: 20
+  sesion: exc-0
+- texto: otra vez EXCLUDED en el upsert, usa parámetros
+  proyecto: sepa-mcp
+  hace: 12
+  sesion: exc-1
+- texto: otra vez EXCLUDED en el upsert, usa parámetros
+  proyecto: sepa-mcp
+  hace: 5
+  sesion: exc-2
+- texto: otra vez EXCLUDED en el upsert, usa parámetros
+  proyecto: sepa-mcp
+  hace: 5
+  sesion: exc-3
+- texto: responde en español por favor
+  proyecto: demo-web
+  hace: 3
+  sesion: esp-0
+- texto: responde en español por favor
+  proyecto: tickets
+  hace: 7
+  sesion: esp-1
+- texto: responde en español por favor
+  proyecto: crm
+  hace: 11
+  sesion: esp-2
+- texto: responde en español por favor
+  proyecto: metodo-x
+  hace: 15
+  sesion: esp-3
+- texto: responde en español por favor
+  proyecto: sitio
+  hace: 19
+  sesion: esp-4
+- texto: haz el commit más corto
+  proyecto: tickets
+  hace: 9
+  sesion: com-0
+- texto: haz el commit más corto
+  proyecto: tickets
+  hace: 10
+  sesion: com-1
+- texto: sí
+  proyecto: tickets
+  hace: 1
+  sesion: ruido
+- texto: dale
+  proyecto: tickets
+  hace: 1
+  sesion: ruido
+- texto: /agents
+  proyecto: tickets
+  hace: 1
+  sesion: ruido
+- texto: exit
+  proyecto: tickets
+  hace: 1
+  sesion: ruido
+- texto: arregla el login de tickets
+  proyecto: tickets
+  hace: 1
+  sesion: ruido
+- texto: ¿cuántos usuarios hay?
+  proyecto: tickets
+  hace: 1
+  sesion: ruido
+- texto: '!ls -la'
+  proyecto: tickets
+  hace: 1
+  sesion: ruido
+- texto: lanza agentes en paralelo (muy viejo)
+  proyecto: sitio
+  hace: 200
+  sesion: viejo
