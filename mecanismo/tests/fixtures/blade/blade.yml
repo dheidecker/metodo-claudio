@@ -1,0 +1,76 @@
+# Las cinco trampas de plantilla-proyecto/.claude/hooks/blade-trampas.sh, como datos (CONTRATO §3).
+# Casos reales: tickets/CLAUDE.md §10. Se comprueban con
+#   python3 -m lib.trampas.cli --probar tests/fixtures/blade
+# y la paridad con el original con tests/migracion_blade.sh.
+
+- id: x-init-con-bloque
+  nivel: aviso
+  globs: ["**/*.blade.php"]
+  patron: 'x-init="[^"]*[;{]'
+  mensaje: "x-init con bloque: x-init evalúa una expresión; mueve la lógica a un método del x-data y llámalo."
+  origen: "tickets/CLAUDE.md §10: limpieza de localStorage en un x-init con ; que nunca corrió"
+  prueba:
+    dispara: |-
+      <div x-data="{}" x-init="localStorage.removeItem('filtros'); cargar()">
+    no_dispara: |-
+      <div x-data="panel()" x-init="init()">
+
+- id: x-show-con-d-flex
+  nivel: aviso
+  globs: ["**/*.blade.php"]
+  patron: '<[^>]*x-show=[^>]*class="[^"]*\bd-(flex|block|inline)[^>]*>|<[^>]*class="[^"]*\bd-(flex|block|inline)[^"]*"[^>]*x-show='
+  mensaje: "x-show junto a d-flex/d-block: la clase !important de Bootstrap gana y no se oculta; pon x-show en un contenedor sin clase de display."
+  origen: "tickets/CLAUDE.md §10: 80 filas con x-show y d-flex que no se plegaban"
+  prueba:
+    dispara: |-
+      <div x-show="abierto" class="d-flex gap-2">
+    no_dispara: |-
+      <div x-show="abierto">
+          <div class="d-flex gap-2">contenido</div>
+      </div>
+
+- id: directiva-en-comentario-js
+  nivel: aviso
+  globs: ["**/*.blade.php"]
+  patron: '^\s*//.*(@section|@if|@yield|@include|@push|<script)'
+  mensaje: "directiva Blade o <script> dentro de un comentario //: Blade lo procesa igual y rompe el head; usa {{-- --}}."
+  origen: "tickets/CLAUDE.md §10: un // @section dentro de un <script> rompió el <head> y php -l dio limpio"
+  prueba:
+    dispara: |-
+          // @include('parciales.menu')
+    no_dispara: |-
+      {{-- @include('parciales.menu') --}}
+          // comentario normal
+
+- id: wire-model-sin-live
+  nivel: aviso
+  globs: ["**/*.blade.php"]
+  bloque: {abre: '<select|type="checkbox"', cierra: '</select>|/>'}
+  patron: 'wire:model="'
+  excepto: 'wire:model\.live'
+  mensaje: "select/checkbox con wire:model sin .live: un re-render lo repinta vacío; regla de las tres cosas: .live, @selected emitido por el servidor, y valor desde el evento si se consume en el mismo gesto."
+  origen: "tickets/CLAUDE.md §10: tres selectores perdían la selección tras un re-render de Livewire"
+  prueba:
+    dispara: |-
+      <select class="form-select"
+              wire:model="estado">
+      </select>
+    no_dispara: |-
+      <select wire:model.live="estado">
+          <option value="1">Uno</option>
+      </select>
+      <input type="text" wire:model="nombre" />
+
+- id: timestamp-sin-nullable
+  nivel: aviso
+  globs: ["**/database/migrations/*.php"]
+  patron: '->timestamp\('
+  excepto: 'nullable|useCurrent|timestamps\('
+  mensaje: "->timestamp() sin nullable(): con explicit_defaults_for_timestamp=OFF el primero recibe ON UPDATE y cada UPDATE le pisa la hora; usa dateTime()."
+  origen: "tickets/CLAUDE.md §10: cartera_historial perdió la hora en 5.509 filas por ON UPDATE CURRENT_TIMESTAMP"
+  prueba:
+    dispara: |-
+      $table->timestamp('registrado_en');
+    no_dispara: |-
+      $table->timestamp('revisado_en')->nullable();
+      $table->timestamps();
