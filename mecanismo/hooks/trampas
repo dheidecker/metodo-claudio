@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Trampas como datos (CONTRATO.md §3). Sucesor de blade-trampas.sh.
+
+PostToolUse Edit|Write (por defecto): aplica las trampas de <proyecto>/.claude/trampas/*.yml cuyos
+globs casan con el archivo editado, solo en las líneas cambiadas respecto a HEAD. Avisa con exit 0
+(systemMessage + additionalContext); exit 2 solo si acierta una trampa de nivel `bloqueo`.
+
+--stop: el mismo motor sobre lo cambiado en el árbol desde la marca de la sesión (sed y heredoc no
+pasan por PostToolUse). Solo avisa, nunca bloquea; respeta stop_hook_active.
+
+Nunca rompe la sesión: sin PyYAML o ante cualquier error, exit 0 y una línea en la bitácora.
+"""
+import json
+import os
+import sys
+import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from lib import comun  # noqa: E402
+from lib.trampas import motor  # noqa: E402
+
+
+def _trampas(raiz, hook, proyecto):
+    """Trampas válidas del proyecto; las rotas se anotan como `error` y se saltan."""
+    errores = []
+    todas = motor.cargar_trampas(raiz, errores)
+    validas = []
+    for t in todas:
+        err = motor.validar(t)
+        if err:
+            errores.append(f"{t.get('id', '?') if isinstance(t, dict) else '?'}: {err[0]}")
+        else:
+            validas.append(t)
+    for e in errores:
+        comun.bitacora(hook, f"error trampa-invalida {e}", proyecto)
+    return validas
+
+
+def post(d):
+    ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+    tr = d.get("tool_response") if isinstance(d.get("tool_response"), dict) else {}
+    f = ti.get("file_path") or tr.get("filePath")
+    if not f:
+        return 0
+    cwd = d.get("cwd") or os.getcwd()
+    p = pathlib.Path(f)
+    if not p.is_absolute():
+        p = pathlib.Path(cwd) / p
+    if not p.is_file():
+        return 0
+    raiz = comun.raiz_proyecto(cwd)
+    proyecto = raiz.name
+    trampas = _trampas(raiz, "trampas", proyecto)
+    if not trampas:
+        return 0  # proyecto sin trampas: no hay nada que anotar
+    base = p.name
+    rel = motor.relativa(p, raiz)
+    hits = []
+    if any(motor.aplica(t, rel) for t in trampas):
+        texto = motor.leer_texto(p)
+        if texto is not None:
+            hits = motor.aciertos(trampas, rel, texto, comun.lineas_cambiadas(p))
+    if not hits:
+        comun.bitacora("trampas", f"silencio {base}", proyecto)
+        return 0
+    por_id = {t["id"]: t for t in trampas}
+    bloquear = False
+    for i in motor.agrupar(hits):
+        b = por_id[i]["nivel"] == "bloqueo"
+        bloquear = bloquear or b
+        comun.bitacora("trampas", f"{'BLOQUEO' if b else 'AVISO'} {i} {base}", proyecto)
+    msg = "\n".join([f"Trampas conocidas en {base}:"] + motor.renglones(hits, por_id))
+    return comun.salida_hook("PostToolUse", msg, bloquear)
+
+
+def stop(d):
+    if d.get("stop_hook_active") is True:
+        return 0
+    cwd = d.get("cwd") or os.getcwd()
+    raiz = comun.raiz_proyecto(cwd)
+    proyecto = raiz.name
+    trampas = _trampas(raiz, "trampas-stop", proyecto)
+    if not trampas:
+        return 0
+    por_id = {t["id"]: t for t in trampas}
+    renglones = []
+    for f in comun.archivos_cambiados(raiz, comun.desde_sesion(d.get("session_id"))):
+        rel = motor.relativa(f, raiz)
+        if not any(motor.aplica(t, rel) for t in trampas):
+            continue
+        texto = motor.leer_texto(f)
+        if texto is None:
+            continue
+        hits = motor.aciertos(trampas, rel, texto, comun.lineas_cambiadas(f))
+        if not hits:
+            continue
+        for i in motor.agrupar(hits):
+            comun.bitacora("trampas-stop", f"AVISO {i} {f.name}", proyecto)
+        renglones.append(f"{rel}:")
+        renglones += ["  " + r for r in motor.renglones(hits, por_id)]
+    if not renglones:
+        comun.bitacora("trampas-stop", "silencio", proyecto)
+        return 0
+    msg = "\n".join(["Avisos de trampas en archivos cambiados (no bloquean):"] + renglones)
+    print(json.dumps({"systemMessage": msg}, ensure_ascii=False))
+    return 0
+
+
+def main(argv):
+    modo_stop = "--stop" in argv
+    hook = "trampas-stop" if modo_stop else "trampas"
+    try:
+        d = comun.leer_stdin_json()
+        return stop(d) if modo_stop else post(d)
+    except comun.SinPyYAML:
+        comun.bitacora(hook, "sin-pyyaml")
+        return 0
+    except Exception as e:  # un hook roto no puede romper la sesión
+        comun.bitacora(hook, f"error {type(e).__name__}: {e}")
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
