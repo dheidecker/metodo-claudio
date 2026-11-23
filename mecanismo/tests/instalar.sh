@@ -44,7 +44,7 @@ chk "explica que el deny es la frontera contra la auto-aprobación" grep -q 'fro
 chk "--help lista confiar" bash -c '"$1" --help | grep -q "^  confiar "' _ "$BIN"
 chk "imprime el snippet del canario en los 3 eventos" bash -c 'for e in PermissionRequest PermissionDenied Notification; do grep -q "hooks.$e" <<<"$1" || exit 1; done' _ "$out1"
 chk "imprime el snippet del juez (PermissionRequest, matcher Bash, timeout 90)" bash -c 'grep -F "jq '"'"'.hooks.PermissionRequest" <<<"$1" | grep -F "\"matcher\": \"Bash\"" | grep -F "mecanismo hook juez-permisos" | grep -qF "\"timeout\": 90"' _ "$out1"
-chk "explica que las reglas ask de deploy y rm -rf se mantienen" grep -q 'reglas ask de gcloud run deploy, gcloud builds submit y rm -rf se mantienen' <<<"$out1"
+chk "explica que las reglas ask de deploy y rm -rf se mantienen" grep -q 'gcloud run jobs execute y rm -rf se mantienen' <<<"$out1"
 chk "--help lista juez" bash -c '"$1" --help | grep -q "^  juez "' _ "$BIN"
 chk "avisa si ~/.local/bin no está en el PATH" grep -q 'no está en tu PATH' <<<"$out1"
 chk "primera corrida no dice «sin cambios»" bash -c '! grep -q "sin cambios" <<<"$1"' _ "$out1"
