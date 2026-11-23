@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Hook PermissionRequest (matcher Bash): el juez de permisos. Ver CONTRATO §12.
+Fail-safe: cualquier problema -> exit 0 sin salida, y Claude Code muestra el diálogo de siempre."""
+import os
+import pathlib
+import sys
+import time
+
+T0 = time.monotonic()
+
+if os.environ.get("MECANISMO_JUEZ_ANIDADO") == "1":   # el `claude -p` del propio juez: nunca recursión
+    sys.exit(0)
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+try:
+    from lib.juez.hook import main
+except Exception:  # noqa: BLE001 — una instalación rota no rompe la sesión
+    try:
+        from lib import comun
+        comun.bitacora("juez-permisos", "error importacion")
+    except Exception:  # noqa: BLE001
+        pass
+    sys.exit(0)
+sys.exit(main(T0))

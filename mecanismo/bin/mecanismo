@@ -20,6 +20,7 @@ uso: mecanismo <subcomando> [args]
   verificar    [--funciones a,b]      deja evidencia en .claude/evidencia/
   confiar      [dir]                  exige TTY: autoriza los comandos del yml del proyecto
   permisos     [--dias N] [--json]
+  juez         [--ultimas N] [--negadas] [--json]   decisiones del juez de permisos (PermissionRequest)
   init         --tipo mcp|web|lib [dir]
   hook <nombre> [args]                lo que llaman los shims; stdin = JSON del hook
   version | --help
@@ -63,6 +64,7 @@ case "$sub" in
   verificar)            pkg=evidencia ;;
   confiar)              pkg=evidencia; mod=confianza ;; # CONTRATO §11: main(argv) en lib.evidencia.confianza
   permisos)             pkg=permisos ;;
+  juez)                 pkg=juez ;;                    # CONTRATO §12: lib.juez.cli
   init)                 pkg=init ;;
   *) echo "mecanismo: subcomando desconocido '$sub'" >&2; uso >&2; exit 2 ;;
 esac

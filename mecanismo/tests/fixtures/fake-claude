@@ -9,11 +9,15 @@
 - FAKE_CLAUDE_VARIANTE simula que el modelo redacta distinto en otra corrida (ids estables, §11):
   `1` = otras canónicas y otro resumen para «paralelo», pero devuelve `existente` como pide el prompt;
   `2` = lo mismo, pero NO devuelve `existente` (el recolector tiene que reconocerla por sus ejemplos).
+- Tarea `juez` (frente F): FAKE_CLAUDE_JUEZ = permitir (por defecto) | negar | dormir (tarda 30 s) |
+  basura (stdout no es JSON) | fuera-de-esquema. Si FAKE_CLAUDE_ENTRADA está definida, guarda ahí los
+  datos recibidos; el log anota además `anidado` (MECANISMO_JUEZ_ANIDADO), `setting_sources` y `cwd`.
 """
 import json
 import os
 import re
 import sys
+import time
 
 argv = sys.argv[1:]
 entrada = sys.stdin.read()
@@ -106,6 +110,35 @@ def trampas(d):
                         "prueba": {"dispara": "x := 1", "no_dispara": "y := 2"}})
     return {"trampas": out}
 
+
+def juez(d):
+    modo = os.environ.get("FAKE_CLAUDE_JUEZ", "permitir")
+    if os.environ.get("FAKE_CLAUDE_ENTRADA"):
+        with open(os.environ["FAKE_CLAUDE_ENTRADA"], "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False)
+    if modo == "dormir":
+        time.sleep(30)
+    if modo == "basura":
+        print("esto no es JSON")
+        sys.exit(0)
+    if modo == "fuera-de-esquema":
+        return {"decision": "quizas", "motivo": "no sé", "riesgo": "bajo"}
+    if modo == "negar":
+        return {"decision": "negar", "motivo": "la persona pidió desplegar web, no api", "riesgo": "alto"}
+    return {"decision": "permitir", "motivo": "la persona pidió desplegar api a us-central1", "riesgo": "bajo"}
+
+
+if tarea == "juez":
+    res = juez(datos)
+    if os.environ.get("FAKE_CLAUDE_LOG"):
+        with open(os.environ["FAKE_CLAUDE_LOG"], "a", encoding="utf-8") as f:
+            f.write(json.dumps({"tarea": tarea, "modelo": valor("--model"), "tope": tope, "n": 1,
+                                "bare": "--bare" in argv, "tools": valor("--tools"),
+                                "anidado": os.environ.get("MECANISMO_JUEZ_ANIDADO"),
+                                "setting_sources": valor("--setting-sources"), "cwd": os.getcwd()}) + "\n")
+    print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": json.dumps(res),
+                      "structured_output": res, "total_cost_usd": 0.02, "session_id": "fake"}))
+    sys.exit(0)
 
 if tarea == "clasificar":
     res = {"items": [clasificar(p) for p in datos["prompts"]]}

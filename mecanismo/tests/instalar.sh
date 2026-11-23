@@ -43,6 +43,9 @@ done
 chk "explica que el deny es la frontera contra la auto-aprobación" grep -q 'frontera real.*§11' <<<"$out1"
 chk "--help lista confiar" bash -c '"$1" --help | grep -q "^  confiar "' _ "$BIN"
 chk "imprime el snippet del canario en los 3 eventos" bash -c 'for e in PermissionRequest PermissionDenied Notification; do grep -q "hooks.$e" <<<"$1" || exit 1; done' _ "$out1"
+chk "imprime el snippet del juez (PermissionRequest, matcher Bash, timeout 90)" bash -c 'grep -F "jq '"'"'.hooks.PermissionRequest" <<<"$1" | grep -F "\"matcher\": \"Bash\"" | grep -F "mecanismo hook juez-permisos" | grep -qF "\"timeout\": 90"' _ "$out1"
+chk "explica que las reglas ask de deploy y rm -rf se mantienen" grep -q 'reglas ask de gcloud run deploy, gcloud builds submit y rm -rf se mantienen' <<<"$out1"
+chk "--help lista juez" bash -c '"$1" --help | grep -q "^  juez "' _ "$BIN"
 chk "avisa si ~/.local/bin no está en el PATH" grep -q 'no está en tu PATH' <<<"$out1"
 chk "primera corrida no dice «sin cambios»" bash -c '! grep -q "sin cambios" <<<"$1"' _ "$out1"
 b0="$(baks)"
@@ -56,12 +59,16 @@ if command -v jq >/dev/null; then
   # jq -e callado aquí dentro: un `>/dev/null` al final de la línea de chk se tragaba el ok/MAL.
   jqe() { jq -e "$@" >/dev/null; }
   echo '{"permissions":{"allow":["Bash(ls*)"]},"hooks":{"Notification":[{"hooks":[{"type":"command","command":"otro"}]}]}}' > "$HOME/.claude/settings.json"
-  for linea in "jq -s" "jq 'def sin_canario"; do
+  for linea in "jq -s" "jq 'def sin_canario" "jq '.hooks.PermissionRequest"; do
     cmd="$(grep -F "  $linea" <<<"$out2" | head -1 | sed 's#/tmp/settings.new#'"$T"'/settings.new#g')"
     chk "aplica el comando «$linea…» impreso" bash -c "$cmd"
   done
   chk "deny fusionado con los 4 de mecanismo y los de guardarrailes" jqe --slurpfile g "$REPO/guardarrailes.json" '.permissions.deny as $d | (["Bash(mecanismo aprobar*)","Bash(mecanismo rechazar*)","Bash(mecanismo confiar*)","Bash(script *)"] + ($g[0].permissions.deny // [])) | all(. as $x | $d | index([$x]))' "$HOME/.claude/settings.json"
   chk "allow fusionado sin perder lo previo" jqe '(.permissions.allow | index("Bash(ls*)")) and (.permissions.allow | index("Bash(mecanismo verificar*)"))' "$HOME/.claude/settings.json"
+  chk "juez en PermissionRequest junto al canario" jqe '[.hooks.PermissionRequest[] | {m: .matcher, c: .hooks[0].command, t: .hooks[0].timeout}] == [{m: null, c: "mecanismo hook canario-permisos", t: 5}, {m: "Bash", c: "mecanismo hook juez-permisos", t: 90}]' "$HOME/.claude/settings.json"
+  cmd="$(grep -F "  jq '.hooks.PermissionRequest" <<<"$out2" | head -1 | sed 's#/tmp/settings.new#'"$T"'/settings.new#g')"
+  bash -c "$cmd"
+  chk "aplicar el juez dos veces no lo duplica" jqe '[.hooks.PermissionRequest[].hooks[].command | select(test("juez"))] | length == 1' "$HOME/.claude/settings.json"
   chk "canario en Notification sin pisar el hook previo" jqe '[.hooks.Notification[].hooks[].command] == ["otro","mecanismo hook canario-permisos"]' "$HOME/.claude/settings.json"
   rm -f "$HOME/.claude/settings.json"
 fi
