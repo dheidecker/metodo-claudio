@@ -23,12 +23,21 @@ hooks/
   informe.sh                resume la bitácora de hooks para podar
   settings-hooks.json       el snippet de settings.json con todo lo anterior
 plantilla-proyecto/.claude/ lo que se copia a un proyecto nuevo:
-  settings.json             tres hooks del proyecto, sin rutas escritas (CLAUDE_PROJECT_DIR)
+  settings.json             los hooks del proyecto, sin rutas escritas (CLAUDE_PROJECT_DIR)
   hooks/lint-editado.sh     php -l / node --check tras cada edición, en el mismo turno
   hooks/blade-trampas.sh    trampas Blade/migraciones en las líneas cambiadas; avisa
   hooks/stop-lint.sh        puerta Stop: bloquea si php -l falla en lo cambiado en la sesión
   hooks/session-marca.sh    marca de inicio de sesión para que stop-lint solo mire lo de hoy
+  hooks/mecanismo-trampas.sh  shim: trampas como datos (Edit|Write y Stop); mudo sin mecanismo
+  hooks/stop-evidencia.sh   shim: puerta Stop de evidencia; mudo sin mecanismo
   agents/desarrollador.md   rol genérico con memory: project, para especializar
+mecanismo/                  el ciclo que mantiene vivas las reglas (Python, se desarrolla aquí)
+  CONTRATO.md               la ley entre piezas: formatos, CLI, exit codes
+  PLAN.md                   el porqué
+  bin/mecanismo             la CLI; instalar.sh la enlaza en ~/.local/bin
+  lib/                      un paquete por subcomando; lib/comun.py congelado
+  hooks/                    los hooks Python que llaman los shims
+  tests/                    unittest + tests/instalar.sh (instalador con HOME falso)
 ```
 
 Dos capas: lo **global** (`METODOLOGIA.md`, `guardarrailes.json`, `hooks/`) se
@@ -102,6 +111,34 @@ bloquea si el índice trae `.env`, cuentas de servicio, claves `.pem`/`.key` o
 Ajusta las reglas a tu stack antes de aplicarlas: las de `php artisan` y
 `gcloud` son ejemplos de un proyecto Laravel en Cloud Run.
 
+## mecanismo: trampas, evidencia y permisos con datos
+
+`mecanismo/` es la parte que **sí** se desarrolla: el ciclo que convierte lo que se
+repite en reglas ejecutables y que pide evidencia de que lo cambiado funciona. La
+confianza sale de verificar después, no de aprobar antes. El porqué está en
+`mecanismo/PLAN.md`; los formatos, en `mecanismo/CONTRATO.md`.
+
+`instalar.sh` enlaza la CLI en `~/.local/bin/mecanismo` (necesita python3 3.12 y
+PyYAML: `apt install python3-yaml`) e imprime las reglas `allow` para que sus
+lecturas no pidan permiso. En un proyecto:
+
+```bash
+cd <proyecto> && mecanismo init --tipo mcp   # o web, o lib
+```
+
+Deja `.claude/mecanismo.yml` (puerta en `aviso`), un `mapa-funciones.yml` de
+ejemplo, las carpetas de trampas y verificación, los dos shims y
+`.claude/evidencia/` en el `.gitignore`. No pisa nada que exista y **no toca
+`settings.json`**: imprime el comando `jq` que engancha los shims. Los shims
+salen en silencio en una máquina sin `mecanismo`.
+
+Pruebas:
+
+```bash
+cd mecanismo && python3 -m unittest discover -s tests -t .
+bash mecanismo/tests/instalar.sh    # el instalador, con un HOME temporal
+```
+
 ## Punto de guardado al compactar (opcional)
 
 `hooks/compactacion.sh` se engancha a `PreCompact` y `PostCompact` (el
@@ -128,7 +165,8 @@ cp -r ~/Proyectos/metodo-claudio/plantilla-proyecto/.claude  <proyecto>/
 
 Trae `settings.json` con tres hooks —`php -l`/`node --check` tras cada edición,
 linter de trampas Blade/migraciones que avisa, y una puerta `Stop` que bloquea
-si `php -l` falla en lo cambiado durante la sesión— y un rol `desarrollador`
+si `php -l` falla en lo cambiado durante la sesión—, los dos shims de
+`mecanismo` (mudos si no está instalado) y un rol `desarrollador`
 genérico con `memory: project`. Todo relativo a `CLAUDE_PROJECT_DIR`: sin rutas
 escritas. Especialízalo con las trampas del proyecto; los hooks de PHP/Blade
 sobran si el proyecto no es PHP — bórralos del `settings.json`.

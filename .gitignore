@@ -1,1 +1,3 @@
 hooks/settings-hooks.local.json
+__pycache__/
+*.pyc
