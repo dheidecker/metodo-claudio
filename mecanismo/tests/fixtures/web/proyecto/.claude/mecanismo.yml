@@ -1,0 +1,5 @@
+# Los tests sustituyen @BASE@ por http://127.0.0.1:<puerto libre> de `python3 -m http.server`.
+version: 1
+tipo: web
+puerta: aviso
+web: {base_url: "@BASE@"}

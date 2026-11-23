@@ -1,0 +1,7 @@
+funciones:
+  - id: saludar
+    globs: ["src/saludar/**"]
+    mcp: {tool: saludar, casos: ".claude/verificacion/casos/saludar.yaml"}
+  - id: sumar
+    globs: ["src/**/sumar.py"]
+    mcp: {tool: sumar, casos: ".claude/verificacion/casos/sumar.yaml"}

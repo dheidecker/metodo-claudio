@@ -1,0 +1,9 @@
+{"casos": [
+{"nombre": "sumar_dos_tres", "descripcion": "2 + 3; en modo roto el servidor devuelve 6",
+ "mcp": {"a": 2, "b": 3}, "divergencias": []},
+{"nombre": "sumar_negativos", "descripcion": "-4 + 1",
+ "mcp": {"a": -4, "b": 1}, "divergencias": []},
+{"nombre": "sumar_version_nueva", "descripcion": "el golden dice version 1 y el servidor ya da 2: divergencia aceptada",
+ "mcp": {"a": 1, "b": 1, "version_nueva": true},
+ "divergencias": [{"clave": "content/0/text/meta/version", "motivo": "la versión 2 del formato es intencional"}]}
+]}

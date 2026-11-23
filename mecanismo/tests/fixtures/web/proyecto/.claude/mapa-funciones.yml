@@ -1,0 +1,7 @@
+funciones:
+  - id: portada
+    globs: ["resources/views/portada.html"]
+    web: {url: "/index.html", pasos: ["fill #email ana@ejemplo.cl", "click #enviar"]}
+  - id: limpia
+    globs: ["resources/views/limpia.html"]
+    web: {url: "/limpia.html", pasos: ["click #b", "esperar 100"]}
