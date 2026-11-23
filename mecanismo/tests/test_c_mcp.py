@@ -17,6 +17,7 @@ CONF = ".claude/mecanismo.yml"
 class TestVerificarStdio(EntornoC):
     def test_mcp_ok_da_exit_0_y_evidencia_ok(self):
         p = self.proyecto(OK, subs=SUBS)
+        self.confiar(p)
         r = self.verificar(p)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         ev = self.ultima_evidencia(p)
@@ -32,6 +33,7 @@ class TestVerificarStdio(EntornoC):
 
     def test_mcp_roto_da_exit_1_y_el_diff_nombra_el_caso(self):
         p = self.proyecto(ROTO, subs=SUBS)
+        self.confiar(p)
         r = self.verificar(p)
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertIn("sumar_dos_tres", r.stdout)
@@ -53,6 +55,7 @@ class TestVerificarStdio(EntornoC):
 
     def test_huellas_y_seleccion_por_archivos_cambiados(self):
         p = self.proyecto(OK, subs=SUBS)
+        self.confiar(p)
         self.tocar(p / "src" / "sumar.py")
         self.tocar(p / "LEEME.txt", "fuera del mapa\n")
         r = self.verificar(p)
@@ -65,6 +68,7 @@ class TestVerificarStdio(EntornoC):
 
     def test_funciones_explicitas_y_desconocidas(self):
         p = self.proyecto(OK, subs=SUBS)
+        self.confiar(p)
         r = self.verificar(p, "--funciones", "saludar")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual([f["id"] for f in self.ultima_evidencia(p)["funciones"]], ["saludar"])
@@ -74,6 +78,7 @@ class TestVerificarStdio(EntornoC):
 
     def test_divergencia_no_declarada_falla(self):
         p = self.proyecto(OK, subs=SUBS)
+        self.confiar(p)
         casos = p / ".claude/verificacion/casos/sumar.yaml"
         casos.write_text(casos.read_text().replace(
             '"divergencias": [{"clave": "content/0/text/meta/version", "motivo": "la versión 2 del formato es intencional"}]',
@@ -86,6 +91,7 @@ class TestVerificarStdio(EntornoC):
 
     def test_falta_golden(self):
         p = self.proyecto(OK, subs=SUBS)
+        self.confiar(p)
         (p / ".claude/verificacion/golden/saludar/saludar_ana.json").unlink()
         r = self.verificar(p, "--funciones", "saludar")
         self.assertEqual(r.returncode, 1)
@@ -133,6 +139,7 @@ class TestVerificarHTTP(EntornoC):
         self.editar_yml(p, CONF, comando=None, url=f"http://127.0.0.1:{puerto}/mcp")
         conf = p / CONF
         conf.write_text(conf.read_text() + f'arranque: "{sys.executable} {SERVIDOR_MCP} --http --puerto {puerto}"\n')
+        self.confiar(p)  # arranque es un comando del yml
         r = self.verificar(p)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         with self.assertRaises(OSError):  # al terminar, no queda nadie escuchando

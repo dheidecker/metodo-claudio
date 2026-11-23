@@ -29,7 +29,9 @@ class TestViaTest(EntornoC):
         (d / "src" / "pasa" / "a.py").write_text("a = 1\n")
         (d / "src" / "falla.py").write_text("b = 1\n")
         (d / "src" / "lenta.py").write_text("c = 1\n")
-        return self.proyecto(d)
+        p = self.proyecto(d)
+        self.confiar(p)
+        return p
 
     def test_pasa_y_guarda_la_cola(self):
         p = self.armar()

@@ -3,7 +3,11 @@
 - ~/.claude falso: CLAUDE_HOME, MECANISMO_HOME y MECANISMO_BITACORA en un tmp.
 - Los proyectos de fixture se copian a tmp y se les hace `git init` + commit antes de usarlos.
 - Todo proceso que se arranca se registra y se mata en tearDown.
+- `confiar(raiz)` registra la confianza (CONTRATO §11) en el MECANISMO_HOME falso, con
+  `comun.exige_tty` e `input` parcheados: sin eso `verificar` no ejecuta ningún comando del yml.
 """
+import contextlib
+import io
 import json
 import os
 import pathlib
@@ -16,6 +20,7 @@ import tempfile
 import time
 import unittest
 import uuid
+from unittest import mock
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent          # mecanismo/
 FIXTURES = RAIZ / "tests" / "fixtures"
@@ -65,6 +70,23 @@ class EntornoC(unittest.TestCase):
         self.git(destino, "add", "-A")
         self.git(destino, "commit", "-q", "-m", "fixture")
         return destino
+
+    def entorno_proceso(self):
+        """Las variables del ~/.claude falso, para código que corre en este mismo proceso."""
+        return mock.patch.dict(os.environ, {k: self.env[k] for k in
+                                            ("CLAUDE_HOME", "MECANISMO_HOME", "MECANISMO_BITACORA")})
+
+    def confiar(self, raiz, respuesta="sí") -> tuple[int, str]:
+        """`mecanismo confiar raiz` como lo haría una persona en su terminal. Devuelve (exit, stdout)."""
+        from lib.evidencia import confianza  # noqa: PLC0415
+        out = io.StringIO()
+        with self.entorno_proceso(), mock.patch("lib.comun.exige_tty"), \
+                mock.patch("builtins.input", return_value=respuesta), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            rc = confianza.main([str(raiz)])
+        if respuesta == "sí":
+            self.assertEqual(rc, 0, out.getvalue())
+        return rc, out.getvalue()
 
     def git(self, d, *args) -> str:
         r = subprocess.run(["git", "-C", str(d), "-c", "user.name=test", "-c", "user.email=test@ejemplo.invalid",
