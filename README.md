@@ -5,8 +5,8 @@ Es **un** archivo markdown que Claude Code lee al arrancar cada sesión; no es
 una herramienta ni depende de ninguna.
 
 En corto: subagentes efímeros por defecto, la continuidad en archivos y no en
-chats, encargos densos con informes delgados, roles con memoria propia, y una
-lista corta de lo que siempre necesita autorización. Con los números que lo
+chats, encargos densos con informes delgados, roles con memoria propia, y un
+juez de permisos que decide lo irreversible y se audita después. Con los números que lo
 justifican.
 
 ## Qué hay en el repo
