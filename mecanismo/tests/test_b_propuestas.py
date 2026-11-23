@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import yaml
 
@@ -15,7 +16,7 @@ from lib import comun
 from lib.propuestas import almacen, cli
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
-VARS = ("CLAUDE_HOME", "MECANISMO_HOME", "MECANISMO_BITACORA", "CLAUDE_PROJECT_DIR", "MECANISMO_TTY_FALSO")
+VARS = ("CLAUDE_HOME", "MECANISMO_HOME", "MECANISMO_BITACORA", "CLAUDE_PROJECT_DIR")
 
 
 def propuesta(pid, tipo, destino, contenido, puntuacion=10):
@@ -91,13 +92,25 @@ class TestListar(Base):
 
 
 class TestDecidir(Base):
+    """Sin bypass por entorno (CONTRATO §11): se parchea exige_tty y se simula lo que teclea la persona."""
+
     def setUp(self):
         super().setUp()
-        os.environ["MECANISMO_TTY_FALSO"] = "1"
+        self.tecleado = None  # None = teclea el id pedido
+        for p in (mock.patch("lib.comun.exige_tty"),
+                  mock.patch("builtins.input", side_effect=self._teclear)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _teclear(self, pregunta):
+        if isinstance(self.tecleado, BaseException):
+            raise self.tecleado
+        if self.tecleado is not None:
+            return self.tecleado
+        return pregunta.rsplit("(", 1)[1].rstrip("): ")
 
     def test_sin_tty_sale_3_y_no_cambia_nada(self):
         env = dict(os.environ, PYTHONPATH=str(RAIZ))
-        env.pop("MECANISMO_TTY_FALSO")
         for accion in ("aprobar", "rechazar"):
             r = subprocess.run([sys.executable, "-c", "import sys; from lib.propuestas.cli import main; sys.exit(main(sys.argv[1:]))",
                                 accion, "regla-paralelo-aaaa1111"], cwd=RAIZ, env=env, stdin=subprocess.DEVNULL,
@@ -113,6 +126,45 @@ class TestDecidir(Base):
         self.assertEqual(t["patron"], r"EXCLUDED\.")
         self.assertEqual(almacen.buscar("trampa-excluded")[1]["estado"], "aprobada")
         self.assertEqual(self.correr("aprobar", "trampa-excluded-cccc3333")[0], 1)  # ya decidida
+
+    def test_aprobar_exige_teclear_el_id(self):
+        destino = self.proy / ".claude" / "trampas" / "upsert-excluded.yml"
+        for tecleado in ("trampa-excluded", "otra cosa", "", EOFError()):
+            self.tecleado = tecleado
+            code, out = self.correr("aprobar", "trampa-excluded-cccc3333")
+            self.assertEqual(code, 1, tecleado)
+            self.assertIn("no coincide", self.err)
+            self.assertFalse(destino.exists())
+            self.assertEqual(almacen.buscar("trampa-excluded")[1]["estado"], "pendiente")
+        self.tecleado = "  trampa-excluded-cccc3333\n"
+        self.assertEqual(self.correr("aprobar", "trampa-excluded")[0], 0)  # por prefijo; se teclea el id completo
+        self.assertTrue(destino.exists())
+
+    def test_rechazar_no_pide_id(self):
+        self.tecleado = "no coincide"
+        self.assertEqual(self.correr("rechazar", "trampa-excluded-cccc3333")[0], 0)
+
+    def test_aprobar_subir_puerta_solo_imprime_diff(self):
+        conf = self.proy / ".claude" / "mecanismo.yml"
+        conf.write_text("version: 1\ntipo: lib\npuerta: aviso   # nace aviso\nlib: {tests: x}\n")
+        antes = conf.read_text()
+        almacen.guardar(propuesta("puerta-bloqueo-demo-eeee5555", "subir-puerta", "proyecto",
+                                  {"archivo": str(conf), "diff": "viejo"}), almacen.dir_global())
+        code, out = self.correr("aprobar", "puerta-bloqueo-demo")
+        self.assertEqual(code, 0, self.err)
+        self.assertIn("-puerta: aviso   # nace aviso", out)
+        self.assertIn("+puerta: bloqueo   # nace aviso", out)
+        self.assertIn("Aplícalo tú", out)
+        self.assertEqual(conf.read_text(), antes)
+        self.assertEqual(almacen.buscar("puerta-bloqueo-demo")[1]["estado"], "aprobada")
+
+    def test_subir_puerta_ya_en_bloqueo_no_se_aprueba(self):
+        conf = self.proy / ".claude" / "mecanismo.yml"
+        conf.write_text("version: 1\npuerta: bloqueo\n")
+        almacen.guardar(propuesta("puerta-bloqueo-demo-eeee5555", "subir-puerta", "proyecto",
+                                  {"archivo": str(conf), "diff": "viejo"}), almacen.dir_global())
+        self.assertEqual(self.correr("aprobar", "puerta-bloqueo-demo")[0], 1)
+        self.assertEqual(almacen.buscar("puerta-bloqueo-demo")[1]["estado"], "pendiente")
 
     def test_aprobar_trampa_no_pisa(self):
         (self.proy / ".claude" / "trampas" / "upsert-excluded.yml").write_text("id: upsert-excluded\n")

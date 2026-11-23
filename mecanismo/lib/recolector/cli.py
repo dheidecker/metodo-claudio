@@ -89,11 +89,14 @@ def main(argv: list[str]) -> int:
         docs = _docs({n: r for n, r in rutas.items() if n in con_algo},
                      [it for it in items_doc if it["proyecto"] in con_algo], metodo)
         previas = almacen.en_carpeta(almacen.dir_global())
-        existentes = [{"id": pid, "resumen": p.get("resumen", "")} for pid, p in sorted(previas.items())
-                      if p.get("origen") == "recolector"]
+        # Ids estables (CONTRATO §11): la fusión ve las propuestas vigentes, también las ya decididas,
+        # para devolver en `existente` la que es el mismo grupo aunque cambie la redacción.
+        existentes = [{"id": pid, "resumen": p.get("resumen", ""), "estado": p.get("estado", "")}
+                      for pid, p in sorted(previas.items()) if p.get("origen") == "recolector"]
         grupos = agrupar.agrupar(muestras, clasif, docs, existentes, pres, errores, stats, args.sin_modelo)
+        tomados: set[str] = set()
         for g in grupos:
-            r = proponer.de_grupo(g, metodo, previas)
+            r = proponer.de_grupo(g, metodo, previas, tomados)
             if r:
                 nuevas.append(r)
     if "claudemd" in quiero and items_doc and not args.sin_modelo:

@@ -1,9 +1,11 @@
 """mecanismo propuestas [--todas] [--json] · propuestas ver ID · aprobar ID · rechazar ID
 
-`aprobar` y `rechazar` exigen TTY (comun.exige_tty): Claude no se aprueba solo.
+`aprobar` y `rechazar` exigen TTY (comun.exige_tty): Claude no se aprueba solo. `aprobar` pide
+además teclear el id de la propuesta (CONTRATO §11); si no coincide, sale con 1 sin hacer nada.
 - aprobar una `trampa-nueva` / `subir-a-hook`: escribe la trampa (nivel aviso) en
   <proyecto>/.claude/trampas/<id>.yml y marca la propuesta `aprobada`.
 - `subir-a-bloqueo` / `podar`: imprime el diff o el comando; el .yml lo cambias tú.
+- `subir-puerta`: imprime el diff de <proyecto>/.claude/mecanismo.yml (aviso -> bloqueo); no lo toca.
 - destino metodologia / proyecto: imprime el diff de METODOLOGIA.md o del CLAUDE.md.
 - destino permisos: imprime el comando jq. Nunca toca settings.json, METODOLOGIA.md ni CLAUDE.md.
 Exit: 0 ok · 1 no se pudo (ya existe, no encontrada) · 2 uso · 3 sin TTY · 4 sin PyYAML.
@@ -83,6 +85,33 @@ def _diff_nivel(archivo: Path, tid: str) -> str:
     return "".join(difflib.unified_diff(antes, despues, f"a/{archivo.name}", f"b/{archivo.name}"))
 
 
+_PUERTA = re.compile(r"^(puerta\s*:\s*)(['\"]?)aviso\2(\s*(?:#.*)?)$")
+
+
+def diff_puerta(archivo: Path) -> str:
+    """Diff de `puerta: aviso` -> `puerta: bloqueo` (clave de primer nivel) en .claude/mecanismo.yml.
+    Solo para mostrar.
+    Sin línea `puerta:` (nace aviso), la añade. "" si el archivo no existe o la puerta ya no es aviso."""
+    try:
+        antes = archivo.read_text(encoding="utf-8").splitlines(keepends=True)
+    except OSError:
+        return ""
+    despues, cambio = [], False
+    for l in antes:
+        m = None if cambio else _PUERTA.match(l.rstrip("\n"))
+        if m:
+            l = f"{m.group(1)}{m.group(2)}bloqueo{m.group(2)}{m.group(3)}\n"
+            cambio = True
+        despues.append(l)
+    if not cambio:
+        if any(re.match(r"^puerta\s*:", l) for l in antes):
+            return ""
+        if despues and not despues[-1].endswith("\n"):
+            despues[-1] += "\n"
+        despues.append("puerta: bloqueo\n")
+    return "".join(difflib.unified_diff(antes, despues, f"a/{archivo.name}", f"b/{archivo.name}"))
+
+
 def _aplicar(p: dict) -> tuple[int, str]:
     """Hace (o imprime) lo que pide la propuesta. Devuelve (exit, mensaje)."""
     tipo, c = p.get("tipo"), p.get("contenido") or {}
@@ -102,6 +131,12 @@ def _aplicar(p: dict) -> tuple[int, str]:
         d = _diff_nivel(Path(c.get("archivo", "")), c.get("id", ""))
         return 0, (d or f"no encontré `nivel: aviso` de {c.get('id')} en {c.get('archivo')}") + \
             "\nAplícalo tú (no se toca el .yml desde aquí)."
+    if tipo == "subir-puerta":
+        archivo = Path(str(c.get("archivo") or ""))
+        d = diff_puerta(archivo) if archivo.is_absolute() else ""
+        if not d:
+            return 1, f"{archivo}: la puerta ya no está en `aviso` (o el archivo no existe); nada que subir"
+        return 0, d + f"\nAplícalo tú en {archivo} (no se toca desde aquí)."
     if tipo == "podar":
         return 0, (f"Para podar «{c.get('id')}» quita su entrada de {c.get('archivo')} "
                    f"(si es la única del archivo: git rm {c.get('archivo')}).")
@@ -115,6 +150,15 @@ def _aplicar(p: dict) -> tuple[int, str]:
     return 1, f"tipo desconocido: {tipo}"
 
 
+def _confirmado(pid: str) -> bool:
+    """Teclear el id completo (CONTRATO §11). Disuasión, no frontera: la frontera es permissions.deny."""
+    try:
+        escrito = input(f"Para aprobar, escribe el id completo ({pid}): ")
+    except (EOFError, KeyboardInterrupt):
+        return False
+    return escrito.strip() == pid
+
+
 def decidir(pid: str, aprobar: bool) -> int:
     comun.exige_tty("aprobar" if aprobar else "rechazar")
     from lib.propuestas import almacen  # noqa: PLC0415
@@ -125,6 +169,9 @@ def decidir(pid: str, aprobar: bool) -> int:
     f, p = r
     if p.get("estado") != "pendiente":
         print(f"{p['id']} ya está {p.get('estado')}", file=sys.stderr)
+        return 1
+    if aprobar and not _confirmado(p["id"]):
+        print("el id no coincide: no se aprueba nada", file=sys.stderr)
         return 1
     if aprobar:
         code, msg = _aplicar(p)

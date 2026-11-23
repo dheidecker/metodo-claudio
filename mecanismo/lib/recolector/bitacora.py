@@ -1,4 +1,4 @@
-"""Propuestas que salen de la bitácora de disparos: `subir-a-bloqueo` y `podar`.
+"""Propuestas que salen de la bitácora: `subir-a-bloqueo` y `podar` (hook trampas) y `subir-puerta` (stop-evidencia).
 
 Aproximación de «corregido» (la bitácora no dice si Claude arregló el aviso):
 - Las líneas `hook=trampas|trampas-stop` del mismo (proyecto, archivo) y el mismo segundo son
@@ -10,6 +10,16 @@ Aproximación de «corregido» (la bitácora no dice si Claude arregló el aviso
   trampa sigue en `aviso` en `.claude/trampas/`.
 - podar: una trampa activa con 0 AVISO/BLOQUEO en la ventana y cuyo .yml tiene más de N días
   (si no, aún no tuvo tiempo de disparar).
+
+subir-puerta (CONTRATO §11): la puerta de evidencia de un proyecto pasa de `aviso` a `bloqueo`
+cuando la bitácora muestra que los avisos fueron justos y se atendieron. Criterio, por proyecto
+(nombre de la bitácora = basename de la raíz, como lo escriben `hooks/stop-evidencia` y `verificar`):
+- Avisos: líneas `stop-evidencia | <proy> | AVISO <f1,f2,...>` (funciones sin evidencia vigente).
+- Atendido: después del aviso, ese MISMO día y en ese proyecto, hay líneas `verificar | <proy> |
+  ok <ids>` cuya unión de ids cubre las funciones del aviso. Un `verificar AVISO` (falló) no cuenta.
+- Se propone solo si hay ≥ MIN_DIAS_PUERTA días distintos con avisos en la ventana y TODOS los
+  avisos de la ventana están atendidos: un solo aviso sin atender y no se propone.
+- Y el proyecto se conoce (su ruta), tiene `.claude/mecanismo.yml` y su `puerta` sigue en `aviso`.
 """
 from __future__ import annotations
 
@@ -24,6 +34,7 @@ from lib.recolector.fuentes import LineaBitacora
 
 UMBRAL_AVISOS = 5
 HOOKS = ("trampas", "trampas-stop")
+MIN_DIAS_PUERTA = 14
 
 
 def trampas_activas(rutas: list[Path]) -> list[tuple[Path, Path, dict]]:
@@ -79,6 +90,85 @@ def disparos(lineas: list[LineaBitacora]) -> dict[tuple[str, str], dict]:
     return st
 
 
+def _ids(detalle: list[str]) -> set[str]:
+    return {x for x in (detalle[0].split(",") if detalle else []) if x}
+
+
+def avisos_de_puerta(lineas: list[LineaBitacora]) -> dict[str, dict]:
+    """{proyecto: {avisos, atendidos, dias:set, sin_atender:[(fecha, ids)]}} según el criterio del módulo.
+    `lineas` en el orden de la bitácora (cronológico); un mismo segundo conserva ese orden."""
+    por_proy: dict[str, list[tuple[int, LineaBitacora]]] = defaultdict(list)
+    for n, l in enumerate(lineas):
+        if (l.hook == "stop-evidencia" and l.categoria == "AVISO") or (l.hook == "verificar" and l.categoria == "ok"):
+            por_proy[l.proyecto].append((n, l))
+    out = {}
+    for proy, ls in por_proy.items():
+        ls.sort(key=lambda nl: (nl[1].fecha, nl[0]))
+        s = {"avisos": 0, "atendidos": 0, "dias": set(), "sin_atender": []}
+        for k, (_n, l) in enumerate(ls):
+            if l.hook != "stop-evidencia":
+                continue
+            dia, pide = l.fecha[:10], _ids(l.detalle)
+            s["avisos"] += 1
+            s["dias"].add(dia)
+            cubierto: set[str] = set()
+            hubo_ok = False
+            for _m, v in ls[k + 1:]:
+                if v.fecha[:10] != dia:
+                    break
+                if v.hook == "verificar":
+                    hubo_ok = True
+                    cubierto |= _ids(v.detalle)
+            if hubo_ok and pide <= cubierto:
+                s["atendidos"] += 1
+            else:
+                s["sin_atender"].append((l.fecha, sorted(pide)))
+        if s["avisos"]:
+            out[proy] = s
+    return out
+
+
+def _puerta(conf_path: Path) -> str | None:
+    try:
+        conf = comun.leer_yaml(conf_path)
+    except comun.SinPyYAML:
+        raise
+    except Exception:  # noqa: BLE001 — un yml roto no se propone
+        return None
+    if not isinstance(conf, dict):
+        return None
+    return str(conf.get("puerta") or "aviso")
+
+
+def propuestas_puerta(lineas: list[LineaBitacora], rutas: list[Path]) -> list[tuple[dict, Path]]:
+    from lib.propuestas.cli import diff_puerta  # noqa: PLC0415
+    por_nombre = {Path(r).name: Path(r) for r in rutas}
+    out = []
+    for proy, s in sorted(avisos_de_puerta(lineas).items()):
+        ruta = por_nombre.get(proy)
+        if ruta is None or s["sin_atender"] or len(s["dias"]) < MIN_DIAS_PUERTA:
+            continue
+        conf = ruta / ".claude" / "mecanismo.yml"
+        if not conf.is_file() or _puerta(conf) != "aviso":
+            continue
+        diff = diff_puerta(conf)
+        if not diff:
+            continue
+        n, nd = s["avisos"], len(s["dias"])
+        out.append(({
+            "id": id_de(f"subir-puerta:{ruta}", base=f"puerta-bloqueo-{proy}"),
+            "estado": "pendiente", "origen": "bitacora", "tipo": "subir-puerta", "destino": "proyecto",
+            "resumen": f"Subir la puerta de evidencia de {proy} a bloqueo: {n} avisos en {nd} días, todos atendidos",
+            "evidencia": {"ocurrencias": n, "proyectos": [proy], "dias": nd, "puntuacion": n * nd,
+                          "ejemplos": [f"{d}: aviso de stop-evidencia seguido de verificar ok"
+                                       for d in sorted(s["dias"], reverse=True)[:3]]},
+            "contenido": {"archivo": str(conf), "diff": diff},
+            "nota": f"atendido = un `verificar ok` posterior, el mismo día, que cubre las funciones del aviso; "
+                    f"mínimo {MIN_DIAS_PUERTA} días con avisos y ninguno sin atender",
+        }, almacen.dir_global()))
+    return out
+
+
 def propuestas(lineas: list[LineaBitacora], rutas: list[Path], dias: int) -> list[tuple[dict, Path]]:
     st = disparos(lineas)
     activas = trampas_activas(rutas)
@@ -111,4 +201,4 @@ def propuestas(lineas: list[LineaBitacora], rutas: list[Path], dias: int) -> lis
                 "evidencia": {"ocurrencias": 0, "proyectos": [proy], "dias": dias, "puntuacion": 0, "ejemplos": []},
                 "contenido": {"archivo": str(archivo), "id": tid, "disparos": 0, "dias": dias},
             }, almacen.dir_proyecto(ruta)))
-    return out
+    return out + propuestas_puerta(lineas, rutas)
