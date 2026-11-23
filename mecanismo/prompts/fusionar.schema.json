@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "required": ["grupos"],
+  "properties": {
+    "grupos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["resumen", "miembros", "alcance", "regla", "documentada_sha", "documentada_en",
+                     "existente", "mecanizable", "trampa"],
+        "properties": {
+          "resumen": {"type": "string"},
+          "miembros": {"type": "array", "items": {"type": "integer"}},
+          "alcance": {"enum": ["metodologia", "proyecto"]},
+          "regla": {"type": "string"},
+          "documentada_sha": {"type": "string"},
+          "documentada_en": {"type": "string"},
+          "existente": {"type": "string"},
+          "mecanizable": {"type": "boolean"},
+          "trampa": {
+            "type": ["object", "null"],
+            "properties": {
+              "id": {"type": "string"},
+              "globs": {"type": "array", "items": {"type": "string"}},
+              "patron": {"type": "string"},
+              "excepto": {"type": "string"},
+              "mensaje": {"type": "string"},
+              "prueba": {
+                "type": "object",
+                "properties": {"dispara": {"type": "string"}, "no_dispara": {"type": "string"}}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
