@@ -83,8 +83,18 @@ importan:
 **Quien delega, cobra.** Tu mensaje final **es** la entrega: nunca termines un
 turno con «esperando a los agentes». Si lanzaste subagentes, esperas, integras
 y devuelves — lanzar y olvidar deja resultados huérfanos que nadie recoge.
-Descompón solo si el trabajo no cabe en un contexto: la profundidad es una
-consecuencia, no un plan.
+**Ancho sí, profundidad no.** Que un subagente lance a su vez otros
+subagentes (profundidad) solo se justifica si el trabajo no cabe en un
+contexto. Repartir el trabajo en varios a la vez (ancho) es lo que se hace
+**por defecto, sin que el usuario lo pida**: cuando una tarea tiene dos o más
+frentes independientes (componentes, archivos o repos distintos, o investigar
+mientras otro implementa), lanza un subagente por frente **en el mismo
+mensaje**, para que corran en paralelo, y tú orquestas e integras lo que
+vuelve. Para que no se pisen: cada uno con archivos disjuntos o en su propio
+worktree (`isolation: "worktree"`), y el contrato de interfaces fijado
+**antes** de lanzarlos. Uno tras otro solo cuando uno depende del resultado del
+otro. El usuario lo pidió en 24 sesiones de 9 proyectos antes de que esto
+quedara escrito: no esperes a que te lo recuerde.
 
 **Antes de dar por terminado un cambio grande, que lo revise alguien que no lo
 escribió.** Un subagente fresco ve solo el diff y el encargo, no el razonamiento
