@@ -192,7 +192,7 @@ class TestHooks(Entorno):
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         r = subprocess.run([sys.executable, "-c", "from lib import comun; comun.exige_tty('aprobar')"],
                            cwd=RAIZ, capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                           env=dict(env, MECANISMO_TTY_FALSO="1"))
+                           env=env)
         self.assertEqual(r.returncode, 3, r.stderr)
 
     def test_exige_tty_con_pseudo_terminal_de_claude(self):

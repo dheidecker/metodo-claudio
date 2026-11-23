@@ -131,7 +131,7 @@ echo "  guardarraíles + hook de compactación + allow y deny de mecanismo, en u
 # `verificar` en allow es seguro: solo ejecuta comandos del yml que confiaste tú (CONTRATO §11).
 ALLOW='["Bash(mecanismo trampas*)", "Bash(mecanismo verificar*)", "Bash(mecanismo recolectar*)", "Bash(mecanismo permisos*)", "Bash(chrome-devtools *)"]'
 # Lo que decide una persona, nunca un agente: deny vale aunque la sesión corra en modo auto.
-DENY='["Bash(mecanismo aprobar*)", "Bash(mecanismo rechazar*)", "Bash(mecanismo confiar*)", "Bash(script *)"]'
+DENY='["Bash(mecanismo aprobar*)", "Bash(mecanismo rechazar*)", "Bash(mecanismo confiar*)", "Bash(script *)", "Edit(~/.claude/mecanismo/confianza.json)", "Write(~/.claude/mecanismo/confianza.json)"]'
 echo "  (el deny de aprobar/rechazar/confiar y de \`script\` es la frontera real contra que un agente se auto-apruebe: CONTRATO §11)"
 echo "  jq -s '.[0] * .[1] * {permissions: {deny: ((.[0].permissions.deny // []) + .[2].permissions.deny + $DENY | unique), ask: ((.[0].permissions.ask // []) + .[2].permissions.ask | unique), allow: ((.[0].permissions.allow // []) + $ALLOW | unique)}}' ~/.claude/settings.json $AQUI/hooks/settings-hooks.local.json $AQUI/guardarrailes.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json"
 echo
