@@ -25,7 +25,8 @@ hooks/
 plantilla-proyecto/.claude/ lo que se copia a un proyecto nuevo:
   settings.json             los hooks del proyecto, sin rutas escritas (CLAUDE_PROJECT_DIR)
   hooks/lint-editado.sh     php -l / node --check tras cada edición, en el mismo turno
-  hooks/blade-trampas.sh    trampas Blade/migraciones en las líneas cambiadas; avisa
+  trampas/blade.yml         trampas Blade/migraciones como datos (fuente de verdad)
+  hooks/blade-trampas.sh    shim: calla si mecanismo aplica blade.yml; si no, las mismas trampas en bash
   hooks/stop-lint.sh        puerta Stop: bloquea si php -l falla en lo cambiado en la sesión
   hooks/session-marca.sh    marca de inicio de sesión para que stop-lint solo mire lo de hoy
   hooks/mecanismo-trampas.sh  shim: trampas como datos (Edit|Write y Stop); mudo sin mecanismo

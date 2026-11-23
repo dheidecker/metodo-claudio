@@ -1,13 +1,34 @@
 #!/usr/bin/env bash
-# PostToolUse sobre Edit|Write, solo *.blade.php y database/migrations/*.php.
-# Cuatro trampas con caso real en tickets/CLAUDE.md §10 que ningún linter ve.
+# SHIM. La fuente de verdad de estas trampas es .claude/trampas/blade.yml (trampas como datos,
+# metodo-claudio/mecanismo/CONTRATO.md §3), que aplica mecanismo-trampas.sh en PostToolUse y,
+# con --stop, en el Stop.
+# - Con `mecanismo` en esta máquina Y .claude/trampas/blade.yml en el proyecto: sale con 0 sin
+#   avisar (anota `silencio delegado-a-mecanismo`), para que ningún aviso salga dos veces.
+#   stop-lint.sh también llama aquí: en ese caso tampoco devuelve nada y el Stop lo cubre
+#   `mecanismo-trampas.sh --stop`.
+# - Si no: fallback, la lógica bash de siempre (abajo), para máquinas sin mecanismo o proyectos
+#   que copiaron la plantilla antes del blade.yml. Si cambias una trampa, cámbiala en el yml Y aquí.
+# Raíz del proyecto como mecanismo (lib/comun.raiz_proyecto): CLAUDE_PROJECT_DIR, si no la raíz git
+# del cwd, si no el cwd.
+#
+# Fallback: PostToolUse sobre Edit|Write, solo *.blade.php y database/migrations/*.php.
+# Cinco trampas con caso real en tickets/CLAUDE.md §10 que ningún linter ve.
 # AVISA (exit 0 + JSON): los greps pueden dar falsos positivos y bloquear sería peor.
 set -uo pipefail
 # Bitácora para poder podar: qué hook, en qué proyecto, con qué resultado. Sin esto,
 # «si en un mes no disparó, se revisa» no se puede aplicar porque nadie lo sabe.
 bitacora(){ printf '%s | %-22s | %-32s | %s\n' "$(date '+%F %T')" "$1" "$(basename "${CLAUDE_PROJECT_DIR:-$PWD}")" "$2" >> "$HOME/.claude/metodo-claudio.log" 2>/dev/null || true; }
+IN="$(cat)"
+if command -v mecanismo >/dev/null 2>&1; then
+  raiz="${CLAUDE_PROJECT_DIR:-}"
+  if [ -z "$raiz" ]; then
+    cwd="$(jq -r '.cwd // empty' <<<"$IN" 2>/dev/null)"; cwd="${cwd:-$PWD}"
+    raiz="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || echo "$cwd")"
+  fi
+  [ -f "$raiz/.claude/trampas/blade.yml" ] && { bitacora blade-trampas "silencio delegado-a-mecanismo"; exit 0; }
+fi
 command -v jq >/dev/null || exit 0
-f="$(jq -r '.tool_input.file_path // .tool_response.filePath // empty')"
+f="$(jq -r '.tool_input.file_path // .tool_response.filePath // empty' <<<"$IN")"
 [ -n "$f" ] && [ -f "$f" ] || exit 0
 avisos=()
 # Solo las líneas que CAMBIARON respecto a HEAD: una trampa vieja en el archivo no es culpa de

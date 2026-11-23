@@ -35,10 +35,14 @@ cp "$FIX/seguido/base.blade.php" "$SB"; cp "$FIX/seguido/base_migracion.php" "$S
 g add "$SB" "$SM"; g commit -qm base
 cp "$FIX/seguido/cambiado.blade.php" "$SB"; cp "$FIX/seguido/cambiado_migracion.php" "$SM"
 
+# El original es hoy un shim: con `mecanismo` en el PATH y blade.yml en el proyecto (aquí lo hay) se
+# calla y delega. Para comparar contra su lógica bash, se le corre con un PATH sin `mecanismo`.
+PATH_SIN_MEC="$(tr ':' '\n' <<<"$PATH" | while IFS= read -r d; do [ -n "$d" ] && [ ! -x "$d/mecanismo" ] && echo "$d"; done | paste -sd:)"
+
 entrada(){ jq -nc --arg p "$1" --arg c "$P" '{tool_input:{file_path:$p}, cwd:$c}'; }
 
 original(){ # rel -> líneas "rel:N:id" según el texto del original (no imprime ids: se mapean por prefijo)
-  entrada "$P/$1" | (cd "$P" && bash "$ORIG") | jq -r '.systemMessage // empty' | while IFS= read -r l; do
+  entrada "$P/$1" | (cd "$P" && PATH="$PATH_SIN_MEC" bash "$ORIG") | jq -r '.systemMessage // empty' | while IFS= read -r l; do
     case "$l" in
       "- x-init con bloque"*) id=x-init-con-bloque ;;
       "- x-show junto a d-flex"*) id=x-show-con-d-flex ;;
