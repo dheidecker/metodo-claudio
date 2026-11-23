@@ -129,7 +129,7 @@ echo "Opcional, lo aplicas tú (Claude no puede tocar tu settings.json):"
 echo "  guardarraíles + hook de compactación + allow y deny de mecanismo, en un solo paso:"
 # Las lecturas y verificaciones de mecanismo no deben pedir permiso (PLAN §1: cero prompts nuevos).
 # `verificar` en allow es seguro: solo ejecuta comandos del yml que confiaste tú (CONTRATO §11).
-ALLOW='["Bash(mecanismo trampas*)", "Bash(mecanismo verificar*)", "Bash(mecanismo recolectar*)", "Bash(mecanismo permisos*)", "Bash(chrome-devtools *)"]'
+ALLOW='["Bash(mecanismo trampas*)", "Bash(mecanismo verificar*)", "Bash(mecanismo recolectar*)", "Bash(mecanismo permisos*)", "Bash(mecanismo juez*)", "Bash(mecanismo propuestas*)", "Bash(chrome-devtools *)"]'
 # Lo que decide una persona, nunca un agente: deny vale aunque la sesión corra en modo auto.
 DENY='["Bash(mecanismo aprobar*)", "Bash(mecanismo rechazar*)", "Bash(mecanismo confiar*)", "Bash(script *)", "Edit(~/.claude/mecanismo/confianza.json)", "Write(~/.claude/mecanismo/confianza.json)"]'
 echo "  (el deny de aprobar/rechazar/confiar y de \`script\` es la frontera real contra que un agente se auto-apruebe: CONTRATO §11)"
