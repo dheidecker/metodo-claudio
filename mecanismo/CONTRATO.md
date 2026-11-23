@@ -259,8 +259,10 @@ Mandan sobre lo anterior donde choquen.
 
 ## 12. Juez de permisos (frente F, hook `PermissionRequest`)
 
-Las reglas `ask` de deploy y `rm -rf` **se mantienen**: abren el diálogo, y el hook decide antes de que se
-muestre. Si `mecanismo` no está o el juez falla, vuelve el diálogo humano (fail-safe).
+Las reglas `ask` de deploy, `rm -rf`, `git push`, `gcloud run jobs execute` y `docker push` **se mantienen**:
+abren el diálogo, y el hook decide antes de que se muestre (Derek, 23-nov: ninguna de estas familias le
+muestra ya un diálogo; un agente decide y él lo revisa después con `mecanismo juez`). Si `mecanismo` no
+está o el juez falla, vuelve el diálogo humano (fail-safe).
 
 - **Piezas.** `hooks/juez-permisos` (python3) → `lib/juez/hook.py:main(t0)`; `lib/juez/{reglas,contexto,
   llamada,auditoria,cli}.py`; `prompts/juez.md` + `juez.schema.json`. CLI: `mecanismo juez [--ultimas N]
@@ -276,9 +278,12 @@ muestre. Si `mecanismo` no está o el juez falla, vuelve el diálogo humano (fai
   además corre con `--setting-sources project` en `estado_dir()/vacio`, o `--bare` con API key, y `--tools ""`).
   `tool_name != Bash` → sin salida.
 - **Qué juzga.** Familias de `lib/permisos/familias` presentes en **cualquier** subcomando. Por defecto
-  `gcloud run deploy`, `gcloud builds submit`, `rm -rf`; se cambia con `estado_dir()/juez.yml` (`familias: [...]`;
-  PyYAML solo si el archivo existe). Si además hay otra irreversible o sensible **no** configurada
-  (`rm -rf build && git push`), no decide (`silencio fuera-de-juez <familia>`): un allow aprobaría el comando entero.
+  `gcloud run deploy`, `gcloud builds submit`, `rm -rf`, `gcloud run jobs execute`, `docker push` y `git push`
+  (`reglas.FAMILIAS_POR_DEFECTO`, con los nombres de `familias`); se cambia con `estado_dir()/juez.yml`
+  (`familias: [...]`; PyYAML solo si el archivo existe). Si además hay otra irreversible o sensible **no** configurada
+  (`rm -rf build && kubectl apply …`), no decide (`silencio fuera-de-juez <familia>`): un allow aprobaría el
+  comando entero. Las reglas deterministas (rm, push) corren aunque su familia no esté configurada, y un
+  NIEGA de cualquiera manda; PERMITE por regla solo si **todas** las familias juzgadas tienen PERMITE de regla.
 - **Reglas de `rm -rf`** (deterministas, < 300 ms, antes del modelo; cada objetivo resuelto contra el `cwd`,
   siguiendo los `cd` del propio comando, con `~`/`$HOME` expandidos, en forma léxica y `realpath`, gana la peor):
   NIEGA variable o sustitución sin expandir, glob en `/` o `$HOME`, `/`, `$HOME`, `~/.claude` (y `CLAUDE_HOME`) o
@@ -287,10 +292,29 @@ muestre. Si `mecanismo` no está o el juez falla, vuelve el diálogo humano (fai
   son efímeros dentro del proyecto (algún componente en `build dist node_modules __pycache__ .cache tmp
   .pytest_cache coverage target .next`) o están bajo `/tmp`, y el resto del comando es `cd` o trivial. Lo demás,
   al modelo.
-- **Juez modelo** (siempre para los deploy): Sonnet, `--json-schema` `{decision: permitir|negar, motivo ≤200,
-  riesgo: bajo|medio|alto}`, `--max-budget-usd 0.10`, timeout 45 s (`MECANISMO_JUEZ_TIMEOUT`,
+- **Reglas de `git push`** (deterministas, < 300 ms, antes del modelo). Cada push del comando se resuelve en
+  su repo (`git -C <cwd>`, siguiendo los `cd` y `-C` del comando) contra la rama actual y el destino real: el
+  refspec explícito (`src:dst`, `HEAD`, `refs/heads/…`) o, sin él, todos los candidatos (rama actual, upstream
+  y `@{push}`; gana el peor). Remoto: el posicional, `--repo`, o `branch.<r>.pushRemote` / `remote.pushDefault` /
+  `branch.<r>.remote` / `origin`. NIEGA `--force`, `-f` (también en `-uf`), `--force-with-lease[=…]`,
+  `--force-if-includes`, `--mirror`, `--delete`/`-d`, `--prune`, refspec con `+`, `:rama` y un remoto con nombre
+  que no existe (salvo `git remote add` en el mismo comando: al modelo). PERMITE si todos los destinos son ramas
+  no protegidas, sin flags fuera de una lista corta (`-u`, `--set-upstream`, `-v`, `-q`, `-n`, `--no-verify`…),
+  esté el árbol limpio o no, y el resto del comando es `cd`, git local (`add commit status log diff fetch show
+  rev-parse`), `echo`/`tail`/`head`/`cat`/`grep`/`wc` o trivial, sin sustituciones (salvo
+  `-m "$(cat <<'EOF' … EOF)"`) ni redirecciones que no sean `2>&1`/`/dev/null`. Protegidas:
+  `main|master|prod*|release*` (también `production`). Al modelo: rama protegida, tags (`--tags`,
+  `--follow-tags`, `refs/tags/…`, `v<dígito>…`, o un tag local), `--all`, URL o ruta como destino, HEAD
+  separado, comodines, `-c`/`--git-dir` globales, `-o`, envoltorios (`xargs git push`), variables o
+  sustituciones, y cualquier flag desconocido.
+- **Juez modelo** (siempre para los deploy, `gcloud run jobs execute` y `docker push`): Sonnet, `--json-schema`
+  `{decision: permitir|negar, motivo ≤200, riesgo: bajo|medio|alto}`, `--max-budget-usd 0.10`, timeout 45 s (`MECANISMO_JUEZ_TIMEOUT`,
   `MECANISMO_MODELO_JUEZ` para tests). Contexto: comando, cwd, familias, nota de las reglas, rama, `git status
   --short` (≤30 líneas), 5 asuntos de commit, 5 últimos prompts humanos y el último texto del asistente.
+  Para `git push`, además `push: [{remoto, origen, rama_destino, rama_remota_existe, commits_a_subir (git log --oneline, ≤20), total_commits,
+  remoto_por_delante}]` (sin fetch: rango contra `refs/remotes/<remoto>/<dst>`, si no `@{u}`, si no
+  `--not --remotes=<remoto>`); el prompt pregunta si la persona pidió publicar y si los commits son los de la
+  sesión.
   **Todo** pasa por `contexto.redactar` (= `comun.redactar` más valores de `--set-env-vars`/`--set-secrets`/…,
   `*PASS*|*SECRET*|*TOKEN*|*KEY*=valor` y `--*password*|token|secret valor`) **antes** de cortar.
 - **Fallos** (timeout, sin `claude`, JSON inválido o fuera del esquema, config inválida, sin PyYAML con

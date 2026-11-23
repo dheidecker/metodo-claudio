@@ -1,8 +1,9 @@
 """Hook PermissionRequest: el juez de permisos (CONTRATO §12).
 
 Intercepta el diálogo de permiso de los comandos Bash de ciertas familias (deploy de Cloud Run,
-`gcloud builds submit`, `rm -rf`) y decide en lugar de la persona: reglas deterministas para `rm -rf`
-y, si no bastan, un juez modelo. Ante cualquier fallo, exit 0 sin salida: vuelve el diálogo humano.
+`gcloud builds submit`, `rm -rf`, `gcloud run jobs execute`, `docker push`, `git push`) y decide en
+lugar de la persona: reglas deterministas para `rm -rf` y `git push` y, si no bastan, un juez modelo.
+Ante cualquier fallo, exit 0 sin salida: vuelve el diálogo humano.
 """
 from __future__ import annotations
 
@@ -81,19 +82,27 @@ def juzgar(d: dict, t0: float) -> int:
     caso = _Caso(d, cmd, cwd, t0)
     familia = "+".join(juzgadas)
 
-    v = reglas.reglas_rm(ps, cwd, caso.raiz) if "rm -rf" in presentes else None
-    if v and v.decision == reglas.NIEGA:
-        return caso.decidir(reglas.NIEGA, "regla", v.motivo, familia, "alto")
-    # Otra irreversible que no le toca al juez (p. ej. `git push` encadenado): un allow aprobaría
+    # Reglas deterministas (rm -rf, git push): un NIEGA de cualquiera manda, esté o no configurada.
+    vs: dict[str, reglas.Veredicto] = {}
+    if "rm -rf" in presentes:
+        vs["rm -rf"] = reglas.reglas_rm(ps, cwd, caso.raiz)
+    if "git push" in presentes:
+        vs["git push"] = reglas.reglas_push(ps, cwd)
+    for v in vs.values():
+        if v.decision == reglas.NIEGA:
+            return caso.decidir(reglas.NIEGA, "regla", v.motivo, familia, "alto")
+    # Otra irreversible que no le toca al juez (p. ej. `kubectl apply` encadenado): un allow aprobaría
     # el comando entero, así que decide la persona.
     otras = [f for f in presentes if f not in conf and (f in F.FAMILIAS_IRREVERSIBLES or f in F.FAMILIAS_SENSIBLES)]
     if otras:
         comun.bitacora(HOOK, f"silencio fuera-de-juez {'+'.join(otras)}", proyecto=caso.proyecto)
         return 0
-    if v and v.decision == reglas.PERMITE and juzgadas == ["rm -rf"]:
-        return caso.decidir(reglas.PERMITE, "regla", v.motivo, familia, "bajo")
+    if all(f in vs and vs[f].decision == reglas.PERMITE for f in juzgadas):
+        return caso.decidir(reglas.PERMITE, "regla", "; ".join(vs[f].motivo for f in juzgadas), familia, "bajo")
 
-    datos = contexto.armar(cmd, cwd, juzgadas, v.motivo if v else "", d.get("transcript_path"))
+    nota = "; ".join(v.motivo for v in vs.values() if v.motivo)
+    destinos = vs["git push"].destinos if "git push" in vs else []
+    datos = contexto.armar(cmd, cwd, juzgadas, nota, d.get("transcript_path"), destinos)
     r = llamada.juzgar(datos)
     return caso.decidir(r["decision"], "modelo", r["motivo"], familia, r["riesgo"],
                         {"costo_usd": r["costo_usd"]})
