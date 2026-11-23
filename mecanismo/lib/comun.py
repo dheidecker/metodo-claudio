@@ -76,7 +76,7 @@ def bitacora(hook: str, resultado: str, proyecto: str | None = None) -> None:
 # Se aplica ANTES de cachear, enviar a un modelo o escribir una propuesta. Orden importa:
 # PEM y DSN primero (contienen cosas que otras reglas partirían a medias).
 _REDACCIONES: list[tuple[str, re.Pattern]] = [
-    ("pem", re.compile(r"-----BEGIN [A-Z0-9 ]+-----.*?-----END [A-Z0-9 ]+-----", re.S)),
+    ("pem", re.compile(r"-----BEGIN [A-Z0-9 ]+-----.*?(?:-----END [A-Z0-9 ]+-----|\Z)", re.S)),  # sin END (texto cortado): hasta el final
     ("dsn", re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s:/@]+:[^\s@/]+@[^\s]+")),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]*")),
     ("bearer", re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=\-|]{8,}")),
@@ -287,9 +287,14 @@ def salida_hook(evento: str, mensaje: str | None, bloquear: bool = False) -> int
 
 def exige_tty(accion: str) -> None:
     """`mecanismo aprobar` y similares: solo una persona en una terminal. Claude no se aprueba solo.
-    MECANISMO_TTY_FALSO=1 existe SOLO para tests y lo ignora si no corre bajo unittest."""
-    if os.environ.get("MECANISMO_TTY_FALSO") == "1" and "unittest" in sys.modules:
-        return
+    Dos señales, las dos necesarias: TTY real en stdin y stdout, y NO estar en un shell de Claude Code
+    (CLAUDECODE=1, que el harness pone en todo Bash suyo; `script -qec` da TTY pero no quita esto).
+    No hay bypass por entorno: los tests parchean esta función con unittest.mock.
+    Es disuasión contra la auto-aprobación accidental, no una frontera de seguridad: la frontera
+    es `permissions.deny` (ver la lista que imprime instalar.sh)."""
+    if os.environ.get("CLAUDECODE"):
+        print(f"{accion}: no se corre desde una sesión de Claude Code. Córrelo tú en tu terminal.", file=sys.stderr)
+        raise SystemExit(3)
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         print(f"{accion}: exige una terminal interactiva (TTY). Córrelo tú, no un agente.", file=sys.stderr)
         raise SystemExit(3)

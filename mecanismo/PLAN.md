@@ -127,7 +127,7 @@ El hook Stop `stop-evidencia` es aparte de `stop-lint`, que no se toca, y no eje
   - `mecanismo/CONTRATO.md` con los esquemas (trampa, propuesta, evidencia, `mecanismo.yml`, mapa, línea de bitácora) y las firmas `lib/<x>/cli.py:main(argv)`.
   - `lib/comun.py`, congelado a partir de aquí.
   - Hook canario de permisos.
-  - Prueba: `python3 -m unittest tests.contrato` y el canario anotado en la bitácora.
+  - Prueba: `cd mecanismo && python3 -m unittest tests.test_contrato` y el canario anotado en la bitácora.
 - **Frentes en paralelo**, cada uno con carpetas disjuntas y su propio worktree: `git worktree add ../metodo-claudio-wt-<X> -b mecanismo-<X> mecanismo`. Antes de trabajar, cada frente corre `merge --ff-only mecanismo`. **Ninguno toca `hooks/statusline.sh`**, que tiene cambios sin commitear de Derek.
 
 | Frente | Qué construye | Prueba |
@@ -136,7 +136,7 @@ El hook Stop `stop-evidencia` es aparte de `stop-lint`, que no se toca, y no eje
 | **B, recolector** | `lib/recolector`, `prompts/` | Offline con un `claude` falso (`MECANISMO_CLAUDE=fixtures/fake-claude`). Canario de redacción: `grep -r CANARIO ~/.claude/mecanismo propuestas/` tiene que dar vacío |
 | **C, evidencia** | `lib/evidencia`, `adaptadores`, `fixtures/{mcp,web}` con un servidor MCP de prueba en Python | `mcp-ok` da ok y `mcp-roto` falla con el diff. Una página con un 404 y un `console.error` falla y nombra ambos. `stop-evidencia` alimentado por stdin: aviso → 0, bloqueo → 2, activo → 0, vigente → 0 |
 | **D, permisos** | `lib/permisos` | `mecanismo permisos --dias 90` reproduce los conteos de §3. Un test unitario comprueba que nunca propone allow para un irreversible |
-| **E, instalación** | `bin/`, `instalar.sh`, `desinstalar.sh`, `init`, los shims de la plantilla, `README.md` y `.gitignore`. También la **reescritura del `CLAUDE.md` de metodo-claudio**, que hoy dice «no hay nada que desarrollar aquí» y pasará a decir: `METODOLOGIA.md`, `hooks/` y la plantilla se instalan y no se adaptan; `mecanismo/` sí se desarrolla, con sus pruebas (`python3 -m unittest discover mecanismo/tests`) y su `CONTRATO.md`; y no se tocan `statusline.sh` ni las piezas existentes salvo encargo | `./instalar.sh` dos veces: la segunda dice «sin cambios», deja respaldo y no hay rutas escritas a mano. `bash -n` limpio. `git diff main -- hooks/statusline.sh` vacío |
+| **E, instalación** | `bin/`, `instalar.sh`, `desinstalar.sh`, `init`, los shims de la plantilla, `README.md` y `.gitignore`. También la **reescritura del `CLAUDE.md` de metodo-claudio**, que hoy dice «no hay nada que desarrollar aquí» y pasará a decir: `METODOLOGIA.md`, `hooks/` y la plantilla se instalan y no se adaptan; `mecanismo/` sí se desarrolla, con sus pruebas (`cd mecanismo && python3 -m unittest discover -s tests -t .`) y su `CONTRATO.md`; y no se tocan `statusline.sh` ni las piezas existentes salvo encargo | `./instalar.sh` dos veces: la segunda dice «sin cambios», deja respaldo y no hay rutas escritas a mano. `bash -n` limpio. `git diff main -- hooks/statusline.sh` vacío |
 
 - **Integración (orquestador):** merge de A–E en `mecanismo` y después en `main`, previa autorización de Derek. El diff de `statusline.sh` tiene que seguir vacío.
 

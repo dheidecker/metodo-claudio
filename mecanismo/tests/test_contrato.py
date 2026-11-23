@@ -84,6 +84,7 @@ class TestRedactar(unittest.TestCase):
         "sanctum": "token 42|CANARIOabcdefghijklmnop",
         "dsn": "postgres://app:CANARIO-pass@db.interno:5432/sepa",
         "pem": "-----BEGIN PRIVATE KEY-----\nCANARIO\nMIIE\n-----END PRIVATE KEY-----",
+        "pem_cortado": "-----BEGIN PRIVATE KEY-----\nCANARIO\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC",
         "correo": "escríbele a canario.CANARIO@ejemplo.cl mañana",
     }
 
@@ -91,7 +92,7 @@ class TestRedactar(unittest.TestCase):
         for tipo, txt in self.CASOS.items():
             r = comun.redactar(txt)
             self.assertNotIn("CANARIO", r, f"{tipo}: {r}")
-            self.assertIn(f"[REDACTADO:{tipo}]", r, f"{tipo}: {r}")
+            self.assertIn(f"[REDACTADO:{tipo.split('_')[0]}]", r, f"{tipo}: {r}")
 
     def test_idempotente_y_no_toca_texto_normal(self):
         t = "orquesta varios agentes en paralelo, 3 | 4 frentes, rama main"
@@ -188,10 +189,22 @@ class TestHooks(Entorno):
         self.assertIn("para", err.getvalue())
 
     def test_exige_tty_sin_terminal(self):
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         r = subprocess.run([sys.executable, "-c", "from lib import comun; comun.exige_tty('aprobar')"],
                            cwd=RAIZ, capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                           env=dict(os.environ, MECANISMO_TTY_FALSO="1"))
+                           env=dict(env, MECANISMO_TTY_FALSO="1"))
         self.assertEqual(r.returncode, 3, r.stderr)
+
+    def test_exige_tty_con_pseudo_terminal_de_claude(self):
+        """`script -qec` da TTY; dentro de Claude Code (CLAUDECODE=1) igual se niega."""
+        import shutil
+        if not shutil.which("script"):
+            self.skipTest("sin script(1)")
+        cmd = f"cd {RAIZ} && {sys.executable} -c \"from lib import comun; comun.exige_tty('aprobar'); print('PASO')\""
+        r = subprocess.run(["script", "-qec", cmd, "/dev/null"], capture_output=True, text=True,
+                           stdin=subprocess.DEVNULL, env=dict(os.environ, CLAUDECODE="1"))
+        self.assertNotIn("PASO", r.stdout)
+        self.assertIn("Claude Code", r.stdout + r.stderr)
 
     def test_canario_anota_en_bitacora(self):
         ev = {"hook_event_name": "Notification", "notification_type": "permission_prompt", "cwd": "/x/demo"}

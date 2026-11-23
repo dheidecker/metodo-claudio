@@ -235,3 +235,24 @@ Mandan sobre lo anterior donde choquen.
   `comun.iterar_transcripts` no recorre). `contenido` de permisos admite `script`, `mantener`,
   `variantes`, `quitar_de_ask`. «Diálogo» = `source == user_temporary` o `decision != accept`;
   AskUserQuestion/ExitPlanMode se cuentan aparte. Lista de nunca-allow: `lib/permisos/familias.NUNCA_ALLOW`.
+
+## 11. Enmiendas tras la revisión (23-nov)
+
+- **`exige_tty`**: además de TTY, se niega si `CLAUDECODE` está en el entorno (todo Bash de Claude Code
+  lo trae; `script -qec` da TTY pero no lo quita). Sin bypass por entorno: los tests usan
+  `unittest.mock.patch("lib.comun.exige_tty")`. `aprobar` pide además teclear el id. Es disuasión; la
+  frontera real es `permissions.deny` con `Bash(mecanismo aprobar*)`, `Bash(mecanismo rechazar*)`,
+  `Bash(mecanismo confiar*)` y `Bash(script *)`, que imprime `instalar.sh`.
+- **`redactar`**: un PEM sin `-----END` (texto cortado) se redacta hasta el final. Regla para todos:
+  **redactar antes de cortar**, nunca `redactar(t[:n])`.
+- **Confianza de comandos del proyecto** (como `direnv allow`): `verificar` ejecuta `test`, `arranque` y
+  `mcp.comando` con shell solo si el sha256 de `.claude/mecanismo.yml` + `.claude/mapa-funciones.yml`
+  está en `~/.claude/mecanismo/confianza.json` para esa raíz. Si no, no ejecuta nada, da `ok: false`,
+  exit 1 y dice «corre `mecanismo confiar` tú». `mecanismo confiar [dir]` (lib.evidencia.confianza,
+  `main(argv)`; `es_confiable(raiz) -> bool`) muestra los comandos, exige TTY y guarda el hash.
+  Así `Bash(mecanismo verificar*)` en allow no es una puerta a ejecutar lo que un agente escriba en el yml.
+- **Propuesta `subir-puerta`** (destino `proyecto`): la puerta de evidencia de un proyecto pasa de
+  `aviso` a `bloqueo` cuando la bitácora de `stop-evidencia` lo justifica (§7.2: la propone el
+  mecanismo con datos, no el calendario). `contenido: {archivo: .claude/mecanismo.yml, diff}`.
+- **Ids estables**: una propuesta nueva cuyo grupo coincide en significado con una existente actualiza la
+  existente en vez de crear otra (la fusión recibe los resúmenes de las propuestas vigentes).

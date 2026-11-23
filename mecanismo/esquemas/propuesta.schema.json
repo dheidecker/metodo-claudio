@@ -44,7 +44,8 @@
         "podar",
         "permiso-allow",
         "permiso-quitar-ask",
-        "envolver-script"
+        "envolver-script",
+        "subir-puerta"
       ]
     },
     "destino": {
