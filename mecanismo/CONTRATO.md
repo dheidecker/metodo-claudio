@@ -325,3 +325,10 @@ está o el juez falla, vuelve el diálogo humano (fail-safe).
 - **Auditoría**: una línea JSON por decisión en `estado_dir()/juez/AAAA-MM.jsonl`:
   `{ts, proyecto, cwd, comando (redactado), familia, via: regla|modelo, decision: permitir|negar, motivo,
   riesgo, duracion_ms, costo_usd?}`. `duracion_ms` cuenta desde que arranca el proceso del hook.
+
+## 13. Mensajes a mitad de turno (23-nov)
+
+Lo que la persona escribe mientras Claude trabaja no queda como entrada `user`: queda como
+`{"type": "attachment", "attachment": {"type": "queued_command", "prompt": …, "commandMode": "prompt",
+"origin": {"kind": "human"}}}`. `comun.es_prompt_humano` y `comun.texto_de` los incluyen (solo modo
+`prompt`, no los `!comando`). Sin esto el juez negó un push que la persona había pedido a mitad de turno.

@@ -161,12 +161,18 @@ class TestTranscripts(Entorno):
             {"type": "user", "message": {"content": [{"type": "tool_result", "content": "x"}]},
              "permissionDecision": {"decision": "accept", "source": "user_temporary"}},
             {"type": "assistant", "message": {"content": [{"type": "text", "text": "hola"}]}},
+            {"type": "attachment", "attachment": {"type": "queued_command", "prompt": "mejor el domingo",
+                                                  "commandMode": "prompt", "origin": {"kind": "human"}}},
+            {"type": "attachment", "attachment": {"type": "queued_command", "prompt": "ls",
+                                                  "commandMode": "bash", "origin": {"kind": "human"}}},
+            {"type": "attachment", "attachment": {"type": "queued_command", "prompt": "<task-notification>",
+                                                  "origin": {"kind": "task-notification"}}},
         ]
         (p / "s1.jsonl").write_text("\n".join(json.dumps(e) for e in entradas) + "\nbasura no json\n")
         todas = [e for _, e in comun.iterar_transcripts()]
-        self.assertEqual(len(todas), 4)
+        self.assertEqual(len(todas), 7)
         humanos = [comun.texto_de(e) for e in todas if comun.es_prompt_humano(e)]
-        self.assertEqual(humanos, ["lanza en paralelo"])
+        self.assertEqual(humanos, ["lanza en paralelo", "mejor el domingo"])
         self.assertEqual(comun.texto_de(entradas[3]), "hola")
         self.assertEqual(list(comun.iterar_transcripts(proyecto="otro")), [])
         h = comun.claude_home() / "history.jsonl"

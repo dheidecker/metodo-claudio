@@ -225,11 +225,24 @@ def es_prompt_humano(e: dict) -> bool:
     """Entrada `user` escrita por la persona: origin.kind == "human". Descarta tool_result,
     mensajes de otros agentes (peer), task-notification y system-reminder."""
     o = e.get("origin")
-    return e.get("type") == "user" and isinstance(o, dict) and o.get("kind") == "human"
+    if e.get("type") == "user" and isinstance(o, dict) and o.get("kind") == "human":
+        return True
+    # Mensaje que la persona escribe A MITAD de turno: no es una entrada `user`, es un attachment
+    # `queued_command` con su propio origin (visto 23-nov: el juez negó un push porque no veía
+    # «mejor el domingo», enviado así). Solo los de modo prompt, no los `!comando`.
+    a = e.get("attachment")
+    if e.get("type") == "attachment" and isinstance(a, dict) and a.get("type") == "queued_command":
+        ao = a.get("origin")
+        return isinstance(ao, dict) and ao.get("kind") == "human" and a.get("commandMode", "prompt") == "prompt"
+    return False
 
 
 def texto_de(e: dict) -> str:
     """Texto plano del mensaje de una entrada user/assistant (concatena bloques type=text)."""
+    a = e.get("attachment")
+    if isinstance(a, dict) and a.get("type") == "queued_command":
+        p = a.get("prompt")
+        return p if isinstance(p, str) else ""
     m = e.get("message") or {}
     c = m.get("content") if isinstance(m, dict) else None
     if isinstance(c, str):
