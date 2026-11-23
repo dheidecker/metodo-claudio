@@ -103,7 +103,7 @@ class TestReglasRm(Base):
         "rm -rf /tmp": "fuera del proyecto",
         "rm -rf /tmp/*": "fuera del proyecto",
         "rm -rf build && rm -rf /etc/x": "fuera del proyecto",
-        "rm -rf build && git push": None,          # ver test_otra_irreversible
+        "rm -rf build && kubectl apply -f x.yml": None,          # ver test_otra_irreversible
     }
     PERMITE = ["rm -rf build", "rm -rf dist node_modules", "rm -rf __pycache__ .cache tmp .pytest_cache",
                "rm -rf coverage target .next", "rm -rf src/__pycache__", "rm -rf build/*", "rm -rf ./build/",
@@ -285,25 +285,25 @@ class TestGuardas(Base):
 
     def test_no_bash_y_no_juzgados(self):
         self.assertEqual(self.hook("rm -rf /", tool="Write").stdout, "")
-        for cmd in ("ls -la", "git push origin main", 'echo "rm -rf /"', "rm -f x", "npm run deploy",
-                    "gcloud run services list"):
+        for cmd in ("ls -la", "kubectl apply -f x.yml", 'echo "rm -rf /"', "rm -f x", "npm run deploy",
+                    "gcloud run services list", 'git commit -m "no hagas git push"'):
             with self.subTest(cmd=cmd):
                 self.assertEqual(self.hook(cmd).stdout, "")
         self.assertEqual(self.bitacora(), [])
         self.assertEqual(self.fake_log(), [])
 
     def test_otra_irreversible_vuelve_al_dialogo(self):
-        r = self.hook("rm -rf build && git push")
+        r = self.hook("rm -rf build && kubectl apply -f x.yml")
         self.assertEqual(r.stdout, "")
-        self.assertEqual(self.bitacora(), ["silencio fuera-de-juez git push"])
+        self.assertEqual(self.bitacora(), ["silencio fuera-de-juez kubectl apply/delete"])
         # ...pero una regla NIEGA sigue mandando
-        self.assertEqual(self.decision(self.hook("rm -rf / && git push"))["behavior"], "deny")
+        self.assertEqual(self.decision(self.hook("rm -rf / && kubectl apply -f x.yml"))["behavior"], "deny")
 
     def test_config_juez_yml(self):
         (self.tmp / "mh").mkdir(exist_ok=True)
-        (self.tmp / "mh" / "juez.yml").write_text("familias: [git push]\n")
-        self.assertEqual(self.hook("rm -rf /").stdout, "")
-        self.assertEqual(self.decision(self.hook("git push origin main"))["behavior"], "allow")
+        (self.tmp / "mh" / "juez.yml").write_text("familias: [docker push]\n")
+        self.assertEqual(self.hook("rm -rf build").stdout, "")
+        self.assertEqual(self.decision(self.hook("docker push img:1"))["behavior"], "allow")
         self.assertEqual(self.fake_log()[0]["tarea"], "juez")
         (self.tmp / "mh" / "juez.yml").write_text("familias: rm -rf\n")
         self.assertEqual(self.hook("rm -rf build").stdout, "")

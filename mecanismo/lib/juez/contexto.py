@@ -23,6 +23,7 @@ TOPE_PROMPT = 1500
 TOPE_ASISTENTE = 2000
 TOPE_COMANDO = 4000
 LINEAS_STATUS = 30
+COMMITS_PUSH = 20
 COLA_TRANSCRIPT = 8 << 20      # solo los últimos 8 MB: un transcript largo no debe frenar el hook
 
 
@@ -118,9 +119,38 @@ def transcript(path: str | None, n: int = 5) -> dict:
             "ultimo_asistente": cortar(asistente, TOPE_ASISTENTE)}
 
 
-def armar(comando: str, cwd: str, familias: list[str], nota: str, transcript_path: str | None) -> dict:
+def push(destinos) -> list[dict]:
+    """Por cada destino de un `git push` (reglas.Destino): los commits que van a subir (como mucho
+    COMMITS_PUSH) y si el remoto va por delante. Sin fetch: según las referencias remotas locales."""
+    out = []
+    for d in destinos[:5]:
+        remota = f"refs/remotes/{d.remoto}/{d.dst}"
+        base = remota if _git(d.dir, "rev-parse", "--verify", "-q", remota).strip() else None
+        if base is None and _git(d.dir, "rev-parse", "--verify", "-q", "@{u}").strip() and \
+                _git(d.dir, "rev-parse", d.src).strip() == _git(d.dir, "rev-parse", "HEAD").strip():
+            base = "@{u}"
+        if base:
+            rango = [f"{base}..{d.src}"]
+            delante = _git(d.dir, "rev-list", "--count", f"{d.src}..{base}").strip()
+        else:
+            rango = [d.src, "--not", f"--remotes={d.remoto}"]
+            delante = ""
+        commits = _git(d.dir, "log", "--oneline", f"-{COMMITS_PUSH}", *rango).splitlines()
+        total = _git(d.dir, "rev-list", "--count", *rango).strip()
+        out.append({
+            "remoto": d.remoto, "origen": d.src, "rama_destino": d.dst,
+            "rama_remota_existe": base == remota,
+            "commits_a_subir": [cortar(c, 200) for c in commits],
+            "total_commits": int(total) if total.isdigit() else None,
+            "remoto_por_delante": int(delante) if delante.isdigit() else None,
+        })
+    return out
+
+
+def armar(comando: str, cwd: str, familias: list[str], nota: str, transcript_path: str | None,
+          destinos_push=()) -> dict:
     t = transcript(transcript_path)
-    return {
+    datos = {
         "tarea": "juez",
         "comando": cortar(comando, TOPE_COMANDO),
         "cwd": redactar(cwd),
@@ -129,3 +159,6 @@ def armar(comando: str, cwd: str, familias: list[str], nota: str, transcript_pat
         "git": git(cwd),
         **t,
     }
+    if destinos_push:
+        datos["push"] = push(destinos_push)
+    return datos
