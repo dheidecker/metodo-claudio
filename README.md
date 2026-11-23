@@ -121,7 +121,7 @@ confianza sale de verificar después, no de aprobar antes. El porqué está en
 
 `instalar.sh` enlaza la CLI en `~/.local/bin/mecanismo` (necesita python3 3.12 y
 PyYAML: `apt install python3-yaml`) e imprime las reglas `allow` para que sus
-lecturas no pidan permiso. En un proyecto:
+lecturas no pidan permiso. También programa el recolector semanal (`systemd --user`, domingo 12:00, ≤1 USD; sin systemd imprime la línea de `crontab`; `--sin-recolector` lo omite). En un proyecto:
 
 ```bash
 cd <proyecto> && mecanismo init --tipo mcp   # o web, o lib

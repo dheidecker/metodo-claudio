@@ -7,6 +7,9 @@
 # - Si el archivo queda vacío después (o solo con la cabecera), lo respalda y lo borra.
 # - Quita ~/.local/bin/mecanismo solo si es el enlace a ESTE clon. Va primero: así corre
 #   siempre, aunque el paso de CLAUDE.md fallara.
+# - Desactiva y borra las units del recolector semanal (mecanismo-recolectar.{service,timer})
+#   solo si su ExecStart es nuestro: un */mecanismo/bin/recolectar-semanal o el script a
+#   mano ~/.claude/mecanismo/recolectar-semanal.sh. Unas ajenas con el mismo nombre se quedan.
 # No toca los respaldos *.bak: quedan para quien los quiera.
 set -euo pipefail
 
@@ -33,6 +36,39 @@ elif [ -e "$BIN" ] || [ -L "$BIN" ]; then
 else
   echo "  no hay mecanismo en $BIN"
 fi
+
+# --- recolector semanal. MECANISMO_SYSTEMCTL: las pruebas pasan uno falso, porque
+# `systemctl --user` habla con el systemd real aunque se cambie HOME.
+SYSTEMCTL="${MECANISMO_SYSTEMCTL:-systemctl}"
+UNIDADES="$HOME/.config/systemd/user"
+SERVICIO="$UNIDADES/mecanismo-recolectar.service"
+TIMER="$UNIDADES/mecanismo-recolectar.timer"
+EXEC=""
+if [ -f "$SERVICIO" ]; then
+  # Primera línea ExecStart=, sin prefijos de systemd (-@:+!) ni comillas; %h y %% resueltos.
+  EXEC="$(sed -n 's/^[[:space:]]*ExecStart=[-@:+!]*//p' "$SERVICIO" | head -1)"
+  EXEC="${EXEC%\"}"; EXEC="${EXEC#\"}"; EXEC="${EXEC//%h/$HOME}"; EXEC="${EXEC//%%/%}"
+fi
+case "$EXEC" in
+  */mecanismo/bin/recolectar-semanal|"$HOME/.claude/mecanismo/recolectar-semanal.sh")
+    HAY_SYSTEMD=0
+    command -v "$SYSTEMCTL" >/dev/null 2>&1 && "$SYSTEMCTL" --user show-environment >/dev/null 2>&1 && HAY_SYSTEMD=1
+    [ "$HAY_SYSTEMD" = 0 ] || "$SYSTEMCTL" --user disable --now mecanismo-recolectar.timer >/dev/null 2>&1 || true
+    rm -f "$SERVICIO" "$TIMER"
+    # Sin systemd que lo haga, el enlace de `enable` quedaría colgando.
+    WANTS="$UNIDADES/timers.target.wants/mecanismo-recolectar.timer"
+    [ ! -L "$WANTS" ] || rm -f "$WANTS"
+    [ "$HAY_SYSTEMD" = 0 ] || "$SYSTEMCTL" --user daemon-reload >/dev/null 2>&1 || true
+    echo "  recolector:     timer desactivado y units quitadas de $UNIDADES" ;;
+  "")
+    if [ -e "$SERVICIO" ] || [ -e "$TIMER" ]; then
+      echo "  recolector:     $UNIDADES/mecanismo-recolectar.* sin ExecStart reconocible: no se toca"
+    else
+      echo "  no hay recolector programado"
+    fi ;;
+  *)
+    echo "  recolector:     $SERVICIO apunta a $EXEC, no es nuestro: no se toca" ;;
+esac
 
 if [ ! -e "$DESTINO" ] && [ ! -L "$DESTINO" ]; then
   echo "  no hay nada instalado en $DESTINO"

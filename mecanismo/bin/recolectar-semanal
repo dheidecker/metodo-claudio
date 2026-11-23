@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Recolector semanal de mecanismo. Lo programa instalar.sh (systemd --user:
+# mecanismo-recolectar.timer, cada domingo 12:00). Solo PROPONE: nada se activa sin
+# `mecanismo aprobar ID` en tu terminal. Coste: tope de 1 USD por corrida.
+# Log: ~/.claude/mecanismo/recolectar-semanal.log (o $MECANISMO_HOME/recolectar-semanal.log).
+# Desactivar: systemctl --user disable --now mecanismo-recolectar.timer
+set -uo pipefail
+
+# La CLI es el bin hermano de este clon, no la del PATH: el timer corre lo que instaló este repo.
+YO="$(readlink -f "${BASH_SOURCE[0]}")"
+MECANISMO="$(dirname "$YO")/mecanismo"
+
+# systemd --user arranca con un PATH mínimo: ~/.local/bin es donde vive `claude`.
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+export MECANISMO_PRESUPUESTO_USD=1
+DIR="${MECANISMO_HOME:-${CLAUDE_HOME:-$HOME/.claude}/mecanismo}"
+mkdir -p "$DIR"
+LOG="$DIR/recolectar-semanal.log"
+{
+  echo "=== $(date '+%F %T')"
+  "$MECANISMO" recolectar --fuente history --dias 14 --top 5
+  "$MECANISMO" recolectar --fuente bitacora --dias 30 --top 5
+} >> "$LOG" 2>&1
+n=$("$MECANISMO" propuestas 2>/dev/null | grep -c 'pendiente')
+# MECANISMO_NOTIFY: para que las pruebas no abran un aviso real en el escritorio.
+AVISO="${MECANISMO_NOTIFY:-notify-send}"
+command -v "$AVISO" >/dev/null && "$AVISO" "mecanismo" "Recolector semanal: $n propuestas pendientes. Revísalas con: mecanismo propuestas" || true

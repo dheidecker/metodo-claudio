@@ -16,6 +16,7 @@ Si estás leyendo esto, alguien abrió una sesión de Claude Code dentro de
    conserva** y le añade una línea `@ruta` que importa la metodología. Siempre
    deja respaldo. También enlaza `~/.local/bin/mecanismo`. Idempotente: la
    segunda corrida dice «sin cambios».
+   Y programa el recolector semanal (`mecanismo-recolectar.timer`, domingo 12:00); en pruebas, `MECANISMO_SYSTEMCTL` falso: el `systemctl --user` real ignora el `HOME`.
 2. Dile al usuario **una vez**: «Instalado. Abre un chat nuevo para que cargue:
    los `CLAUDE.md` se leen al arrancar la sesión». No pidas confirmación.
 3. En ese chat nuevo, el usuario puede comprobar que llegó con el prompt de

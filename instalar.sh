@@ -6,9 +6,21 @@
 # importación (@ruta), que Claude Code resuelve al cargar. Así conviven las
 # reglas de quien instala con la metodología, y `git pull` sigue actualizándola.
 #
-# También enlaza la CLI de mecanismo en ~/.local/bin/mecanismo. Nunca toca
-# settings.json: imprime el comando jq para que lo apliques tú.
+# También enlaza la CLI de mecanismo en ~/.local/bin/mecanismo y programa el
+# recolector semanal (systemd --user; sin systemd, imprime la línea de crontab).
+# Nunca toca settings.json ni crontab: imprime el comando para que lo apliques tú.
+#
+#   ./instalar.sh [--sin-recolector]
 set -euo pipefail
+
+RECOLECTOR=1
+for arg in "$@"; do
+  case "$arg" in
+    --sin-recolector) RECOLECTOR=0 ;;
+    -h|--help) echo "uso: $0 [--sin-recolector]"; exit 0 ;;
+    *) echo "metodo-claudio: argumento desconocido: $arg (uso: $0 [--sin-recolector])" >&2; exit 2 ;;
+  esac
+done
 
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIGEN="$AQUI/METODOLOGIA.md"
@@ -106,6 +118,75 @@ case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) echo "  aviso:          $BIN_DIR no está en tu PATH: añádelo para que los shims encuentren mecanismo" ;;
 esac
+
+# --- recolector semanal: cada domingo 12:00, mecanismo/bin/recolectar-semanal.
+# MECANISMO_SYSTEMCTL existe para las pruebas: `systemctl --user` habla con el systemd
+# REAL del usuario aunque se cambie HOME, así que los tests le pasan uno falso.
+SYSTEMCTL="${MECANISMO_SYSTEMCTL:-systemctl}"
+UNIDADES="$HOME/.config/systemd/user"
+REC="$AQUI/mecanismo/bin/recolectar-semanal"
+REC_DESC="cada domingo 12:00 corre mecanismo recolectar (history 14 días + bitácora 30); solo propone, coste ≤1 USD (normalmente ~0,15)"
+if [ "$RECOLECTOR" = 0 ]; then
+  echo "  recolector:     omitido (--sin-recolector); si ya estaba programado, sigue como estaba"
+
+elif command -v "$SYSTEMCTL" >/dev/null 2>&1 && "$SYSTEMCTL" --user show-environment >/dev/null 2>&1; then
+  # ExecStart: % se escapa como %%, y entre comillas si la ruta lleva espacios.
+  EXEC="${REC//%/%%}"
+  case "$EXEC" in *[[:space:]]*) EXEC="\"$EXEC\"" ;; esac
+  SERVICIO="[Unit]
+Description=mecanismo: recolector semanal de propuestas (metodo-claudio)
+
+[Service]
+Type=oneshot
+ExecStart=$EXEC
+TimeoutStartSec=30min"
+  # Persistent=false a propósito: si el PC estaba apagado el domingo, no corre el lunes
+  # (gastaría la cuota de un día de trabajo).
+  TIMER="[Unit]
+Description=mecanismo: recolector cada domingo 12:00
+
+[Timer]
+OnCalendar=Sun *-*-* 12:00:00
+Persistent=false
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target"
+  mkdir -p "$UNIDADES"
+  REESCRITAS=0
+  for par in "service:$SERVICIO" "timer:$TIMER"; do
+    ext="${par%%:*}"; contenido="${par#*:}"
+    f="$UNIDADES/mecanismo-recolectar.$ext"
+    if [ -f "$f" ] && [ "$(cat "$f")" = "$contenido" ]; then continue; fi
+    if [ -e "$f" ] || [ -L "$f" ]; then
+      mv "$f" "$f.$STAMP.bak"
+      echo "  recolector:     $f era distinto: reescrito (respaldo: $f.$STAMP.bak)"
+    fi
+    printf '%s\n' "$contenido" > "$f"
+    REESCRITAS=1; CAMBIOS=1
+  done
+  if [ "$REESCRITAS" = 1 ]; then
+    if "$SYSTEMCTL" --user daemon-reload && "$SYSTEMCTL" --user enable --now mecanismo-recolectar.timer >/dev/null 2>&1; then
+      echo "  recolector:     programado (systemd --user): $REC_DESC"
+    else
+      echo "  aviso:          units escritas en $UNIDADES, pero systemctl --user enable --now mecanismo-recolectar.timer falló: córrelo tú"
+    fi
+  elif "$SYSTEMCTL" --user is-enabled mecanismo-recolectar.timer >/dev/null 2>&1; then
+    echo "  recolector:     ya programado (systemd --user): $REC_DESC"
+  else
+    # Units al día pero el timer apagado: lo apagó alguien a propósito. No se reactiva.
+    echo "  recolector:     units al día pero el timer está desactivado: no se reactiva (systemctl --user enable --now mecanismo-recolectar.timer para volver)"
+  fi
+  echo "  desactivar:     systemctl --user disable --now mecanismo-recolectar.timer"
+
+else
+  # macOS, WSL sin systemd, contenedores: no se toca crontab, se imprime la línea.
+  CRON_REC="$REC"
+  case "$CRON_REC" in *[[:space:]]*) CRON_REC="\"$CRON_REC\"" ;; esac
+  echo "  recolector:     sin systemd de usuario; para programarlo, añade con \`crontab -e\` esta línea:"
+  echo "    0 12 * * 0 $CRON_REC"
+  echo "                  $REC_DESC"
+fi
 
 # Sin python3/PyYAML se avisa y se sigue: los shims y hooks de mecanismo salen en silencio.
 if ! command -v python3 >/dev/null 2>&1; then

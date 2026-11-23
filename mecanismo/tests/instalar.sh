@@ -4,21 +4,45 @@
 # Comprueba: dos corridas (la 2.ª «sin cambios», sin respaldos nuevos), respaldo de un
 # archivo ajeno, enlace colgante rehecho (y respaldado si era de otra herramienta), deny
 # sugerido, desinstalar solo quita lo suyo (también con un CLAUDE.md que solo importa),
-# sin rutas a mano, init idempotente y shims silenciosos sin mecanismo en el PATH.
+# sin rutas a mano, init idempotente y shims silenciosos sin mecanismo en el PATH; y el
+# recolector semanal (units de systemd --user, crontab sin systemd, --sin-recolector).
+# systemctl SIEMPRE falso (MECANISMO_SYSTEMCTL): el real habla con el systemd del usuario
+# aunque HOME sea temporal.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)"
 HOME_REAL="$HOME"
-T="$(mktemp -d)"
+T="$(mktemp -d -p /var/tmp)"
 export HOME="$T/home"
 export CLAUDE_HOME="$HOME/.claude" MECANISMO_BITACORA="$T/bitacora.log"
 unset CLAUDE_PROJECT_DIR MECANISMO_HOME
 mkdir -p "$HOME"
 trap 'rm -rf "$T"' EXIT
 
+# systemctl falso: anota cada llamada en $T/systemctl.log. Sin $T/sin-systemd responde como
+# un systemd de usuario vivo; is-enabled mira $T/timer-activo (enable lo crea, disable lo borra).
+mkdir -p "$T/falsos"
+cat > "$T/falsos/systemctl" <<FALSO
+#!/usr/bin/env bash
+echo "\$*" >> "$T/systemctl.log"
+[ ! -e "$T/sin-systemd" ] || exit 1
+case "\$*" in
+  *" enable "*) touch "$T/timer-activo" ;;
+  *" disable "*) rm -f "$T/timer-activo" ;;
+  *" is-enabled "*) [ -e "$T/timer-activo" ] || exit 1 ;;
+esac
+exit 0
+FALSO
+chmod +x "$T/falsos/systemctl"
+export MECANISMO_SYSTEMCTL="$T/falsos/systemctl"
+SYSD_REAL="$HOME_REAL/.config/systemd/user"
+foto_sysd() { find "$SYSD_REAL" -printf '%p %T@ %s\n' 2>/dev/null | sort; }
+SYSD_ANTES="$(foto_sysd)"
+
 # Guardarraíl de la propia prueba: si el HOME no es el temporal, no se corre nada.
 case "$HOME" in "$T"/*) ;; *) echo "ABORTO: HOME no es temporal ($HOME)"; exit 1 ;; esac
 [ "$HOME" != "$HOME_REAL" ] || { echo "ABORTO: HOME real"; exit 1; }
+case "$MECANISMO_SYSTEMCTL" in "$T"/*) ;; *) echo "ABORTO: systemctl no es el falso"; exit 1 ;; esac
 
 N=0; FALLOS=0
 ok()  { N=$((N+1)); echo "ok   - $1"; }
@@ -168,14 +192,132 @@ done
 salida="$(echo '{}' | PATH="$HOME/.local/bin:/usr/bin:/bin" "$P/.claude/hooks/mecanismo-trampas.sh" 2>/dev/null)"; rc=$?
 chk "shim con mecanismo pero sin el hook: exit 0 (rc=$rc)" test "$rc" = 0
 
+# --- 9. recolector semanal (HOME propio para no arrastrar lo de arriba)
+export HOME="$T/home-rec"; mkdir -p "$HOME"
+U="$HOME/.config/systemd/user"; SRV="$U/mecanismo-recolectar.service"; TIM="$U/mecanismo-recolectar.timer"
+LOGS="$T/systemctl.log"; REC="$REPO/mecanismo/bin/recolectar-semanal"
+llamadas() { cat "$LOGS" 2>/dev/null | grep -c -- "$1"; }
+reset_sysd() { rm -rf "$HOME" "$LOGS" "$T/timer-activo" "$T/sin-systemd"; mkdir -p "$HOME"; }
+TIMER_ESPERADO='[Unit]
+Description=mecanismo: recolector cada domingo 12:00
+
+[Timer]
+OnCalendar=Sun *-*-* 12:00:00
+Persistent=false
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target'
+
+# 9.1 con systemd: escribe las units y activa el timer
+reset_sysd
+o="$("$REPO/instalar.sh" 2>&1)"; rc=$?
+chk "recolector: sale 0" test "$rc" = 0
+chk "recolector: ExecStart al bin de este clon" grep -qxF "ExecStart=$REC" "$SRV"
+chk "recolector: service oneshot con TimeoutStartSec=30min" bash -c 'grep -qx "Type=oneshot" "$1" && grep -qx "TimeoutStartSec=30min" "$1"' _ "$SRV"
+chk "recolector: timer idéntico a la referencia (domingo 12:00, Persistent=false)" test "$(cat "$TIM")" = "$TIMER_ESPERADO"
+chk "recolector: daemon-reload" grep -qx -- '--user daemon-reload' "$LOGS"
+chk "recolector: enable --now del timer" grep -qx -- '--user enable --now mecanismo-recolectar.timer' "$LOGS"
+chk "recolector: dice qué corre, cuándo y el coste" bash -c 'grep -F "programado (systemd --user)" <<<"$1" | grep -F "domingo 12:00" | grep -qF "≤1 USD (normalmente ~0,15)"' _ "$o"
+chk "recolector: dice cómo desactivarlo" grep -qF 'systemctl --user disable --now mecanismo-recolectar.timer' <<<"$o"
+
+# 9.2 segunda corrida: «sin cambios», sin volver a llamar a enable
+en0="$(llamadas ' enable ')"; f0="$(stat -c %Y "$SRV" "$TIM")"
+o="$("$REPO/instalar.sh" 2>&1)"
+chk "recolector 2.ª: «sin cambios»" grep -q 'sin cambios' <<<"$o"
+chk "recolector 2.ª: no vuelve a llamar a enable ($en0 -> $(llamadas ' enable '))" test "$(llamadas ' enable ')" = "$en0"
+chk "recolector 2.ª: units sin reescribir" test "$(stat -c %Y "$SRV" "$TIM")" = "$f0"
+chk "recolector 2.ª: dice «ya programado»" grep -q 'ya programado' <<<"$o"
+
+# 9.3 el usuario lo desactivó: no se reactiva
+"$MECANISMO_SYSTEMCTL" --user disable --now mecanismo-recolectar.timer
+o="$("$REPO/instalar.sh" 2>&1)"
+chk "desactivado a mano: no llama a enable" test "$(llamadas ' enable ')" = "$en0"
+chk "desactivado a mano: lo dice" grep -q 'no se reactiva' <<<"$o"
+
+# 9.4 units viejas a mano (como las de hoy): se reescriben, con respaldo
+reset_sysd; mkdir -p "$U"
+printf '[Unit]\nDescription=mecanismo: recolector semanal de propuestas (metodo-claudio)\n\n[Service]\nType=oneshot\nExecStart=%%h/.claude/mecanismo/recolectar-semanal.sh\nTimeoutStartSec=30min\n' > "$SRV"
+printf '%s\n' "$TIMER_ESPERADO" > "$TIM"
+o="$("$REPO/instalar.sh" 2>&1)"
+chk "units a mano: ExecStart reescrito" grep -qxF "ExecStart=$REC" "$SRV"
+chk "units a mano: lo dice" grep -q 'mecanismo-recolectar.service era distinto: reescrito' <<<"$o"
+chk "units a mano: respaldo del service viejo" bash -c 'grep -qF "%h/.claude/mecanismo/recolectar-semanal.sh" "$1".*.bak' _ "$SRV"
+chk "units a mano: el timer igual no se toca" test ! -e "$(ls "$TIM".*.bak 2>/dev/null | head -1)"
+chk "units a mano: enable --now" grep -qx -- '--user enable --now mecanismo-recolectar.timer' "$LOGS"
+chk "units a mano: no dice «sin cambios»" bash -c '! grep -q "sin cambios" <<<"$1"' _ "$o"
+
+# 9.5 sin systemd de usuario: imprime la línea de crontab y no escribe units
+reset_sysd; touch "$T/sin-systemd"
+o="$("$REPO/instalar.sh" 2>&1)"; rc=$?
+chk "sin systemd: sale 0" test "$rc" = 0
+chk "sin systemd: imprime la línea de crontab" grep -qxF "    0 12 * * 0 $REC" <<<"$o"
+chk "sin systemd: no escribe units" test ! -e "$SRV" -a ! -e "$TIM"
+chk "sin systemd: no llama a enable" test "$(llamadas ' enable ')" = 0
+o="$(MECANISMO_SYSTEMCTL="$T/no-existe/systemctl" "$REPO/instalar.sh" 2>&1)"
+chk "sin systemctl en absoluto: imprime la línea de crontab" grep -qxF "    0 12 * * 0 $REC" <<<"$o"
+o="$("$REPO/instalar.sh" 2>&1)"
+chk "sin systemd 2.ª: «sin cambios»" grep -q 'sin cambios' <<<"$o"
+
+# 9.6 --sin-recolector: no lo instala, y si ya estaba no lo quita
+reset_sysd
+o="$("$REPO/instalar.sh" --sin-recolector 2>&1)"; rc=$?
+chk "--sin-recolector: sale 0" test "$rc" = 0
+chk "--sin-recolector: no escribe units" test ! -e "$SRV" -a ! -e "$TIM"
+chk "--sin-recolector: no llama a systemctl" test ! -s "$LOGS"
+chk "--sin-recolector: lo dice" grep -q 'omitido (--sin-recolector)' <<<"$o"
+"$REPO/instalar.sh" >/dev/null 2>&1; : > "$LOGS"
+"$REPO/instalar.sh" --sin-recolector >/dev/null 2>&1
+chk "--sin-recolector con timer ya puesto: units intactas" grep -qxF "ExecStart=$REC" "$SRV"
+chk "--sin-recolector con timer ya puesto: no lo desactiva" test ! -s "$LOGS"
+"$REPO/instalar.sh" --otra >/dev/null 2>&1; rc=$?
+chk "argumento desconocido: exit 2" test "$rc" = 2
+
+# 9.7 desinstalar: quita solo las units nuestras
+: > "$LOGS"
+o="$("$REPO/desinstalar.sh" 2>&1)"; rc=$?
+chk "desinstalar recolector: sale 0" test "$rc" = 0
+chk "desinstalar recolector: units quitadas" test ! -e "$SRV" -a ! -e "$TIM"
+chk "desinstalar recolector: disable --now" grep -qx -- '--user disable --now mecanismo-recolectar.timer' "$LOGS"
+chk "desinstalar recolector: daemon-reload después" bash -c 'tail -1 "$1" | grep -qx -- "--user daemon-reload"' _ "$LOGS"
+reset_sysd; mkdir -p "$U"
+printf '[Service]\nType=oneshot\nExecStart=%%h/.claude/mecanismo/recolectar-semanal.sh\n' > "$SRV"; printf '%s\n' "$TIMER_ESPERADO" > "$TIM"
+mkdir -p "$U/timers.target.wants"; ln -s "$TIM" "$U/timers.target.wants/mecanismo-recolectar.timer"
+"$REPO/desinstalar.sh" >/dev/null 2>&1
+chk "desinstalar: quita también las units a mano de ~/.claude/mecanismo" test ! -e "$SRV" -a ! -e "$TIM"
+chk "desinstalar: no deja el enlace de timers.target.wants" test ! -L "$U/timers.target.wants/mecanismo-recolectar.timer"
+reset_sysd; mkdir -p "$U"
+printf '[Service]\nType=oneshot\nExecStart=/usr/local/bin/otra-cosa --semanal\n' > "$SRV"; printf '%s\n' "$TIMER_ESPERADO" > "$TIM"
+antes="$(cat "$SRV" "$TIM")"
+o="$("$REPO/desinstalar.sh" 2>&1)"
+chk "desinstalar: units ajenas con el mismo nombre intactas" test "$(cat "$SRV" "$TIM" 2>/dev/null)" = "$antes"
+chk "desinstalar: no desactiva el timer ajeno" test "$(llamadas disable)" = 0
+chk "desinstalar: dice que no es nuestro" grep -q 'no es nuestro: no se toca' <<<"$o"
+
+# 9.8 recolectar-semanal: llama al mecanismo hermano (no al del PATH), con tope de 1 USD
+RS="$T/rs"; mkdir -p "$RS"; cp "$REC" "$RS/recolectar-semanal"
+cat > "$RS/mecanismo" <<FALSO
+#!/usr/bin/env bash
+echo "\$* USD=\$MECANISMO_PRESUPUESTO_USD" >> "$T/mecanismo.log"
+[ "\$1" != propuestas ] || printf 'a  pendiente\nb  pendiente\nc  aprobada\n'
+FALSO
+printf '#!/usr/bin/env bash\necho "$*" >> "%s/aviso.log"\n' "$T" > "$T/falsos/aviso"
+chmod +x "$RS/mecanismo" "$T/falsos/aviso"; ln -s "$RS/recolectar-semanal" "$T/enlace-rs"
+MECANISMO_NOTIFY="$T/falsos/aviso" "$T/enlace-rs"; rc=$?
+chk "recolectar-semanal: sale 0" test "$rc" = 0
+chk "recolectar-semanal: history 14 y bitácora 30, top 5, con USD=1" test "$(grep recolectar "$T/mecanismo.log")" = $'recolectar --fuente history --dias 14 --top 5 USD=1\nrecolectar --fuente bitacora --dias 30 --top 5 USD=1'
+chk "recolectar-semanal: log en mecanismo/recolectar-semanal.log" grep -q '^=== ' "$CLAUDE_HOME/mecanismo/recolectar-semanal.log"
+chk "recolectar-semanal: avisa con las pendientes" grep -qF 'Recolector semanal: 2 propuestas pendientes' "$T/aviso.log"
+
 # --- 8. bash -n
-for f in "$REPO/instalar.sh" "$REPO/desinstalar.sh" "$ORIGEN_BIN" "$REPO/mecanismo/tests/instalar.sh" \
+for f in "$REPO/instalar.sh" "$REPO/desinstalar.sh" "$ORIGEN_BIN" "$REPO/mecanismo/bin/recolectar-semanal" "$REPO/mecanismo/tests/instalar.sh" \
          "$REPO/plantilla-proyecto/.claude/hooks/mecanismo-trampas.sh" "$REPO/plantilla-proyecto/.claude/hooks/stop-evidencia.sh"; do
   chk "bash -n ${f#$REPO/}" bash -n "$f"
 done
 chk "jq . plantilla settings.json" bash -c 'jq . "$1" >/dev/null' _ "$REPO/plantilla-proyecto/.claude/settings.json"
 
 # --- y nada de esto tocó el HOME real
+chk "el ~/.config/systemd/user real no cambió (mtime antes y después)" test "$SYSD_ANTES" = "$(foto_sysd)"
 chk "el ~/.local/bin/mecanismo real no apunta a la carpeta temporal" bash -c '! [[ "$(readlink "$1/.local/bin/mecanismo" 2>/dev/null)" == "$2"* ]]' _ "$HOME_REAL" "$T"
 
 echo
