@@ -68,6 +68,38 @@ def casa(regla: str, herramienta: str, comando: str | None) -> bool:
     return False
 
 
+def _rx_claude(pat: str) -> re.Pattern:
+    """El patrón de una regla Bash como lo casa Claude Code, por el lado ancho: `x *` casa con `x` y con
+    todo lo que empiece por `x `; `x:*` (sintaxis antigua) y `x*` con todo lo que empiece por `x`;
+    `x` solo con `x`; un `*` en medio casa con cualquier cosa."""
+    if pat.endswith(":*"):
+        return re.compile(re.escape(pat[:-2]) + ".*", re.S)
+    if pat.endswith(" *"):
+        base = pat[:-2]
+        return re.compile(".*".join(re.escape(x) for x in base.split("*")) + r"(?:\s.*)?", re.S)
+    return re.compile(".*".join(re.escape(x) for x in pat.split("*")), re.S)
+
+
+def casa_claude(regla: str, comando: str) -> bool:
+    """¿Claude Code dejaría pasar `comando` con esta regla allow? Se prueba el comando entero (con los
+    espacios colapsados) y cada subcomando; una regla `Bash` sin patrón casa con todo."""
+    tool, pat = partes(regla)
+    if tool != "Bash":
+        return False
+    if pat is None or not pat.strip():
+        return True
+    rx = _rx_claude(pat.strip())
+    candidatos = [comando.strip(), " ".join(comando.split())]
+    for pieza, _ in familias.partir_con_ops(comando):
+        candidatos += [pieza, " ".join(familias._tokens(pieza))]
+    return any(rx.fullmatch(c) for c in candidatos if c)
+
+
+def casa_corpus(regla: str) -> str | None:
+    """El primer comando del corpus de irreversibles (familias.CORPUS) que la regla dejaría pasar, o None."""
+    return next((c for c in familias.CORPUS_NUNCA_ALLOW if casa_claude(regla, c)), None)
+
+
 def es_protegida(regla: str) -> bool:
     """La regla cubre un irreversible o un sensible: nunca se propone quitarla de ask."""
     tool, _ = partes(regla)

@@ -31,6 +31,8 @@ class Grupo:
     por_regla: int = 0            # reasonCode rule:* : el comando entero casó una regla ask
     simples_aprobados: int = 0    # aprobados que no eran compuestos ni too-complex (los que un allow quitaría)
     variantes: Counter = field(default_factory=Counter)
+    comandos: Counter = field(default_factory=Counter)   # comando exacto de cada aprobado simple (en memoria;
+    #                                                      solo se escribe si pasa a regla exacta y no lleva secretos)
     proyectos: set = field(default_factory=set)
     dias: set = field(default_factory=set)
     ejemplos: list = field(default_factory=list)
@@ -118,6 +120,7 @@ def analizar(decisiones: Iterable[Decision], dias: int | None, subagentes: bool,
                 g.variantes[c.variante] += 1
             if not d.es_rechazo and not c.compuesto and not too_complex:
                 g.simples_aprobados += 1
+                g.comandos[(d.comando or "").strip()] += 1
             if too_complex:
                 f = forma(d.comando or "")
                 gc = a.complejos.setdefault(f, Grupo(f))

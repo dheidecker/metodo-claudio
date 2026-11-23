@@ -7,7 +7,9 @@ Tres tipos:
 
 Nunca se escribe settings.json: cada propuesta lleva `comando_jq`, que se imprime y aplica una persona
 tras `mecanismo aprobar ID`. Nunca sale `permiso-allow` para la lista fija de familias.IRREVERSIBLES,
-para las SENSIBLES (van envueltas) ni para intérpretes y shells remotos (NUNCA_ALLOW).
+para las SENSIBLES (van envueltas) ni para intérpretes y shells remotos (NUNCA_ALLOW). Y ninguna regla
+`permiso-allow` casa con un comando del corpus familias.CORPUS: si `Bash(<familia> *)` casaría, se
+estrecha al comando exacto más aprobado, y si ni así es segura, no se propone.
 """
 from __future__ import annotations
 
@@ -68,16 +70,65 @@ def puede_allow(g: Grupo) -> bool:
     return True
 
 
+def regla_segura(regla: str) -> bool:
+    """Una regla allow es segura si no deja pasar NINGÚN comando del corpus de irreversibles
+    (familias.CORPUS), simulando el casado de Claude Code. Se comprueba la regla, no su prefijo:
+    `Bash(npm run *)` tiene un prefijo inocente y casa con `npm run deploy`. Además, `rm` nunca
+    lleva comodín."""
+    tool, pat = mreglas.partes(regla)
+    if tool != "Bash":
+        return True
+    if pat is None or not pat.strip():
+        return False                      # `Bash` a secas casa con todo
+    if "*" in pat:
+        cabeza = familias.normalizar(mreglas.prefijo(regla)).split()
+        if not cabeza or familias._palabra_comando(cabeza[0]) in familias.SIN_COMODIN:
+            return False
+    return mreglas.casa_corpus(regla) is None
+
+
+def _exacta(g: Grupo) -> tuple[str | None, str]:
+    """La regla sin comodín para el comando aprobado más frecuente del grupo, o None si ni así es segura."""
+    if not g.comandos:
+        return None, "sin comandos aprobados"
+    cmd, n = g.comandos.most_common(1)[0]
+    if not cmd or "\n" in cmd or any(c in cmd for c in "*()"):
+        return None, f"el comando más aprobado ({n}×) no cabe en una regla exacta"
+    if comun.redactar(cmd) != cmd:
+        return None, "el comando más aprobado lleva un secreto"
+    if familias.es_irreversible(cmd) or familias.clasificar(cmd).compuesto:
+        return None, "el comando más aprobado es irreversible o compuesto"
+    regla = f"Bash({cmd})"
+    if not regla_segura(regla):
+        return None, f"{regla} casa con un irreversible"
+    return regla, f"{n} de {g.simples_aprobados} aprobaciones son exactamente ese comando"
+
+
 def _permiso_allow(a: Analisis, cfg: dict, minimo: int) -> list[dict]:
     out = []
     for g in sorted(a.familias.values(), key=lambda g: -g.dialogos):
         if g.rechazados or g.simples_aprobados < minimo or not puede_allow(g):
             continue
-        regla = f"Bash({g.nombre} *)" if g.herramienta == "Bash" else g.herramienta
+        nota, cubre = None, g.nombre
+        if g.herramienta != "Bash":
+            regla = g.herramienta
+        else:
+            regla = f"Bash({g.nombre} *)"
+            choca = None if regla_segura(regla) else (mreglas.casa_corpus(regla) or "rm con comodín")
+            top = g.comandos.most_common(1)[0][0] if g.comandos else None
+            no_cubre = top is not None and not mreglas.casa_claude(regla, top)
+            if choca or no_cubre:
+                exacta, porque = _exacta(g)
+                if not exacta:
+                    continue
+                motivo = (f"{regla} dejaría pasar `{choca}`" if choca
+                          else f"{regla} no cubre el comando más aprobado")
+                nota = f"Estrechada: {motivo}. Se propone solo el comando exacto ({porque})."
+                regla, cubre = exacta, mreglas.partes(exacta)[1]
         if regla in cfg.get("allow", []):
             continue
         # Si una regla ask la cubre, un allow no quita el diálogo (ask gana): no se propone.
-        if any(mreglas.casa(r, g.herramienta, g.nombre) for r in cfg.get("ask", [])):
+        if any(mreglas.casa(r, g.herramienta, cubre) for r in cfg.get("ask", [])):
             continue
         out.append(_base(
             "permiso-allow", g.nombre, f"permiso-allow|{regla}",
@@ -85,7 +136,7 @@ def _permiso_allow(a: Analisis, cfg: dict, minimo: int) -> list[dict]:
             g.evidencia(),
             {"lista": "allow", "accion": "agregar", "regla": regla,
              "comando_jq": mreglas.comando_jq(agregar={"allow": [regla]})},
-            None))
+            nota))
     return out
 
 
@@ -180,9 +231,11 @@ def generar(a: Analisis, cfg: dict | None = None, minimo: int = MINIMO) -> list[
     cfg = cfg if cfg is not None else mreglas.leer_reglas()
     props = (_permiso_allow(a, cfg, minimo) + _quitar_ask(a, cfg) + _git_push(a, minimo)
              + _bq_query(a, cfg) + _compuestos(a, minimo))
-    # Defensa en profundidad: ninguna permiso-allow sobre un irreversible, pase lo que pase arriba.
-    return [p for p in props if not (p["tipo"] == "permiso-allow"
-                                     and familias.clasificar(mreglas.prefijo(p["contenido"]["regla"])).irreversible)]
+    # Defensa en profundidad: ninguna permiso-allow que deje pasar un irreversible conocido, pase lo
+    # que pase arriba. Se comprueba la REGLA contra el corpus, no solo su prefijo.
+    return [p for p in props if not (p["tipo"] == "permiso-allow" and (
+        not regla_segura(p["contenido"]["regla"])
+        or familias.clasificar(mreglas.prefijo(p["contenido"]["regla"])).irreversible))]
 
 
 def escribir(props: list[dict], destino: Path | None = None) -> list[tuple[str, str]]:

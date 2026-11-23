@@ -60,6 +60,64 @@ NUNCA_ALLOW = frozenset({
     "xargs", "env", "find", "timeout", "watch", "systemd-run",
 })
 
+# Familias que nunca reciben una regla allow con comodín: `Bash(rm *)` cubre `rm -rf`, se haya
+# aprobado lo que se haya aprobado.
+SIN_COMODIN = frozenset({"rm"})
+
+# CORPUS de irreversibles (y de NUNCA_ALLOW) conocidos, con sus variantes. Una regla allow propuesta
+# no puede casar con NINGUNO (ver reglas.casa_corpus): `Bash(npm run *)` sale de aprobar
+# `npm run build`, pero casa con `npm run deploy`. Se comprueba la regla, no el prefijo.
+# Para ampliar: un ejemplo más por variante; test_d_permisos exige que cada irreversible esté
+# clasificado como tal y que cada familia de IRREVERSIBLES tenga al menos un ejemplo.
+CORPUS: dict[str, tuple[str, ...]] = {
+    "git push": ("git push", "git push origin main", "git push origin feat", "git push -u origin feat",
+                 "git push --force", "git push -f origin feat", "git push --force-with-lease",
+                 "git push origin +feat", "git push --mirror", "git push --all", "git push origin --delete feat",
+                 "git push origin :feat", "git -C repo push", "git --no-pager push"),
+    "gcloud run deploy": ("gcloud run deploy", "gcloud run deploy api --image x", "gcloud beta run deploy api",
+                          "gcloud alpha run deploy api"),
+    "gcloud builds submit": ("gcloud builds submit", "gcloud builds submit --tag x .", "gcloud beta builds submit"),
+    "gcloud run jobs execute": ("gcloud run jobs execute j", "gcloud run jobs execute j --wait",
+                                "gcloud beta run jobs execute j"),
+    "deploy": ("npm run deploy", "npm run deploy:prod", "pnpm run deploy", "pnpm deploy", "yarn deploy",
+               "yarn run deploy", "make deploy", "firebase deploy", "firebase deploy --only hosting", "fly deploy",
+               "flyctl deploy", "vercel deploy --prod", "netlify deploy --prod", "gcloud app deploy",
+               "gcloud functions deploy f", "npx prisma migrate deploy", "./deploy.sh", "./deploy.sh prod",
+               "deploy.sh", "bin/deploy", "./scripts/deploy prod", "cap production deploy"),
+    "migrate prod": ("php artisan migrate --force", "php artisan migrate:fresh", "php artisan migrate:refresh",
+                     "php artisan migrate:rollback", "php artisan migrate:reset", "php artisan migrate --env=production",
+                     "python manage.py migrate --settings=prod", "python3 manage.py migrate --settings=config.production",
+                     "rails db:migrate RAILS_ENV=production", "bin/rails db:migrate RAILS_ENV=production"),
+    "DROP/TRUNCATE": ("psql -c 'DROP TABLE t'", "psql -c 'TRUNCATE TABLE t'", "mysql -e 'DROP DATABASE d'",
+                      "sqlite3 db.sqlite 'DROP TABLE t'", "bq query 'DROP TABLE d.t'", "dropdb prod"),
+    "rm -rf": ("rm -rf build", "rm -rf /", "rm -fr x", "rm -Rf x", "rm -fR x", "rm -r -f x", "rm -f -r x",
+               "rm -R -f x", "rm --recursive --force x", "rm --force --recursive x", "rm -r --force x",
+               "rm x -rf", "rm -rfv x", "rm -vrf x"),
+    "kubectl apply/delete": ("kubectl apply -f x.yml", "kubectl delete pod y", "kubectl -n x delete pod y",
+                             "kubectl delete ns prod", "kubectl replace -f x.yml", "kubectl --context prod apply -f x"),
+    "terraform apply": ("terraform apply", "terraform apply -auto-approve", "terraform destroy",
+                        "terraform destroy -auto-approve", "terraform -chdir=infra apply"),
+    "npm publish": ("npm publish", "npm publish --access public", "yarn publish", "yarn npm publish",
+                    "pnpm publish", "pnpm -r publish"),
+    "gh pr merge": ("gh pr merge 3", "gh pr merge 3 --squash --delete-branch", "gh pr merge --admin 3"),
+    "gh release": ("gh release create v1", "gh release delete v1", "gh release upload v1 x.tgz",
+                   "gh release edit v1"),
+    "docker push": ("docker push img:1", "docker image push img:1", "podman push img", "docker compose push",
+                    "docker compose push api", "docker compose -f prod.yml push", "docker-compose push",
+                    "docker buildx build --push -t x .", "docker build --push -t x ."),
+    # NUNCA_ALLOW: un allow sobre estos es un allow sobre cualquier cosa.
+    "interpretes": ("bash -c x", "sh x.sh", "zsh -c x", "dash -c x", "fish -c x", "python x.py", "python3 -c x", "node -e x", "deno run x",
+                    "bun x", "perl -e x", "ruby -e x", "php -r x", "eval x", "env x", "find . -delete",
+                    "find . -exec rm {} +", "xargs rm", "timeout 5 x", "watch x", "systemd-run x", "uv run x",
+                    "script -qec x", "tmux new x", "screen x", "sudo x", "su -c x", "curl -X POST x", "wget x",
+                    "psql -c x", "mysql -e x", "sqlite3 x"),
+    "shells remotos": ("ssh host", "ssh host rm -rf x", "scp a host:", "gcloud compute ssh vm",
+                       "gcloud compute scp a vm:", "gcloud beta compute ssh vm", "docker exec -it c sh",
+                       "docker run img", "docker run --rm -it img sh", "docker compose exec app sh",
+                       "docker compose run app x", "kubectl exec -it p -- sh"),
+}
+CORPUS_NUNCA_ALLOW: tuple[str, ...] = tuple(c for cs in CORPUS.values() for c in cs)
+
 # Patrones de shell (se aplican a cada subcomando con las comillas enmascaradas).
 _RX: dict[str, re.Pattern] = {
     "git push": re.compile(_GIT + r"push\b"),
@@ -71,12 +129,14 @@ _RX: dict[str, re.Pattern] = {
     "npm publish": re.compile(_INI + r"(?:npm|yarn|pnpm)\s+(?:\S+\s+)*?publish\b"),
     "gh pr merge": re.compile(_INI + r"gh\s+pr\s+merge\b"),
     "gh release": re.compile(_INI + r"gh\s+release\b"),
-    "docker push": re.compile(_INI + r"(?:docker|podman)\s+(?:image\s+)?push\b"),
+    # `docker compose push` y `docker buildx build --push` también publican.
+    "docker push": re.compile(_INI + r"(?:(?:docker|podman)\s+(?:image\s+|compose\s+(?:\S+\s+)*?)?|docker-compose\s+"
+                              r"(?:\S+\s+)*?)push\b|" + _INI + r"(?:docker|podman)\s+(?:buildx\s+)?build\s+(?:\S+\s+)*?--push\b"),
     "bq query": re.compile(_INI + r"bq\s+(?:--?\S+\s+)*query\b"),
 }
 _RX_MIGRATE = re.compile(r"\bmigrate(?::(fresh|refresh|rollback|reset))?\b")
 _RX_PROD = re.compile(r"--force\b|\bprod(?:uction|uccion|ucción)?\b")
-_RX_RM = re.compile(r"(?:^|[\s(])rm((?:\s+-{1,2}[\w-]+)+)")
+_RX_RM = re.compile(r"(?:^|[\s(`{])rm(?=\s|$)")
 _RX_SQL = re.compile(
     r"(?i)\bdrop\s+(?:table|database|schema|view|index|materialized\s+view|function|role|user|owned)\b"
     r"|\btruncate\s+table\b|\bTRUNCATE\s+[\w.\"`]+|\bdropdb\b")
@@ -152,6 +212,78 @@ def partir(cmd: str) -> list[str]:
     return [p for p, _ in partir_con_ops(cmd)]
 
 
+# Envoltorios que no cambian qué se ejecuta, con las opciones que llevan un valor aparte.
+_ENVOLTORIOS: dict[str, frozenset] = {
+    "command": frozenset({"-p"}), "builtin": frozenset(), "exec": frozenset({"-a"}),
+    "sudo": frozenset({"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t", "-D", "-R", "-T"}),
+    "env": frozenset({"-u", "-C", "-S"}), "nice": frozenset({"-n"}), "nohup": frozenset(),
+    "time": frozenset({"-f", "-o"}), "timeout": frozenset({"-s", "-k"}), "xargs": frozenset(
+        {"-n", "-I", "-L", "-P", "-d", "-E", "-s", "-a"}),
+    "then": frozenset(), "do": frozenset(), "else": frozenset(), "!": frozenset(),
+}
+_RX_ASIGNACION = re.compile(r"[A-Za-z_]\w*=(?:(\$\(|`)|\S*)")
+
+
+def _palabra_comando(tok: str) -> str:
+    """`\\rm` -> `rm`, `/bin/rm` -> `rm`, `./deploy.sh` -> `deploy.sh`."""
+    tok = tok.lstrip("\\")
+    if "/" in tok.rstrip("/"):
+        tok = tok.rstrip("/").rsplit("/", 1)[-1]
+    return tok
+
+
+def normalizar(pieza: str) -> str:
+    """El subcomando con su primera palabra tal como se ejecuta: sin asignaciones `VAR=x`, sin
+    envoltorios (`command`, `builtin`, `sudo -u u`, `env -i VAR=x`, `nice -n 5`, `timeout 5`...),
+    sin `\\` inicial y sin ruta (`/bin/rm` -> `rm`). Así `/bin/rm -rf x`, `\\rm -rf x` y
+    `sudo env A=1 nice rm -rf x` se clasifican igual que `rm -rf x`. `command -v x` es una consulta:
+    se deja tal cual."""
+    s = (pieza or "").strip()
+    while s:
+        s = s.lstrip()
+        m = re.match(r"(?:\$\(|`|\(|\{)\s*", s)
+        if m and m.end():
+            s = s[m.end():]
+            continue
+        m = _RX_ASIGNACION.match(s)
+        if m:
+            s = s[m.end():] if m.group(1) else s[m.end():].lstrip()
+            continue
+        m = re.match(r"\S+", s)
+        palabra = _palabra_comando(m.group(0))
+        resto = s[m.end():].lstrip()
+        if palabra not in _ENVOLTORIOS:
+            return palabra + (" " + resto if resto else "")
+        if palabra == "command" and re.match(r"-[vV]\b", resto):
+            return palabra + " " + resto
+        con_valor, s = _ENVOLTORIOS[palabra], resto
+        while s:                                  # opciones del envoltorio (y su valor)
+            m = re.match(r"(\S+)\s*", s)
+            x = m.group(1)
+            if x == "--":
+                s = s[m.end():]
+                break
+            if palabra == "env" and _RX_ASIGNACION.fullmatch(x):
+                s = s[m.end():]
+                continue
+            if not x.startswith("-") or x == "-":
+                break
+            s = s[m.end():]
+            if x in con_valor:
+                s = re.sub(r"^\S+\s*", "", s, count=1)
+        if palabra == "timeout":                  # la duración
+            s = re.sub(r"^\S+\s*", "", s, count=1)
+    return s
+
+
+def _cabezas(pieza: str) -> list[str]:
+    """El subcomando normalizado y cada sustitución `$(...)` o `` `...` `` que contiene, normalizada
+    también: `echo $(\\rm -rf x)` ejecuta un `rm -rf`."""
+    out = [normalizar(pieza)]
+    out += [normalizar(pieza[m.end():]) for m in re.finditer(r"\$\(|`", pieza)]
+    return out
+
+
 def _tokens(pieza: str) -> list[str]:
     """Palabras del subcomando sin asignaciones, prefijos inofensivos ni `timeout N`.
     `X=$(cmd args)` se lee como `cmd args`: la sustitución es lo que se ejecuta."""
@@ -180,10 +312,10 @@ def _tokens(pieza: str) -> list[str]:
 
 def nombre_generico(pieza: str) -> str | None:
     """`git status`, `gcloud compute ssh`, `php artisan test`, `ls`... None si es trivial."""
-    t = _tokens(pieza)
+    t = _tokens(normalizar(pieza))
     if not t:
         return None
-    base = t[0].rsplit("/", 1)[-1]
+    base = _palabra_comando(t[0])
     if (not base or base in _TRIVIALES or base.startswith("-") or re.fullmatch(r"[\W\d]*", base)
             or re.fullmatch(r"[\w-]+\(\)\{?", base)):     # definición de función: `d(){`
         return None
@@ -207,10 +339,20 @@ def nombre_generico(pieza: str) -> str | None:
 
 
 def _es_rm_rf(pieza: str) -> bool:
+    """`rm` con recursivo (-r/-R/--recursive) y forzado (-f/--force), en cualquier orden, juntos o
+    separados, antes o después de los operandos (GNU rm acepta `rm x -rf`); `--` corta las opciones."""
     for m in _RX_RM.finditer(pieza):
-        flags = m.group(1)
-        r = re.search(r"(?:^|\s)-[a-zA-Z]*[rR]|--recursive\b", flags)
-        f = re.search(r"(?:^|\s)-[a-zA-Z]*f|--force\b", flags)
+        r = f = False
+        for x in pieza[m.end():].split():
+            x = x.rstrip(")`;")
+            if x == "--":
+                break
+            if x.startswith("--"):
+                r = r or x == "--recursive"
+                f = f or x == "--force"
+            elif re.fullmatch(r"-[a-zA-Z]+", x):
+                r = r or bool(re.search(r"[rR]", x))
+                f = f or "f" in x
         if r and f:
             return True
     return False
@@ -243,7 +385,15 @@ def variante_push(pieza: str) -> str:
 
 
 def familias_de(pieza: str) -> list[str]:
-    """Familias especiales (irreversibles o sensibles) presentes en un subcomando, en orden de gravedad."""
+    """Familias especiales (irreversibles o sensibles) presentes en un subcomando, en orden de gravedad.
+    Se mira el subcomando normalizado (ver normalizar) y cada sustitución de comando que contenga."""
+    hallas: list[str] = []
+    for cabeza in _cabezas(pieza):
+        hallas += [f for f in _familias_de_uno(cabeza) if f not in hallas]
+    return sorted(hallas, key=_ORDEN.__getitem__)
+
+
+def _familias_de_uno(pieza: str) -> list[str]:
     hallas = []
     for fam, _ in IRREVERSIBLES + SENSIBLES:
         if fam == "rm -rf":
@@ -272,7 +422,7 @@ def clasificar(cmd: str) -> Clasificacion:
     genericos: list[str] = []
     for p in piezas:
         for fam in familias_de(p):
-            especiales.append((_ORDEN[fam], fam, p))
+            especiales.append((_ORDEN[fam], fam, normalizar(p)))
         g = nombre_generico(p)
         if g:
             genericos.append(g)
