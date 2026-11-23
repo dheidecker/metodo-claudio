@@ -62,6 +62,7 @@ class TestStopEvidencia(EntornoC):
         p = self.proyecto(OK, subs=SUBS)
         self.puerta(p, "bloqueo")
         self.git(p, "commit", "-qam", "puerta bloqueo")
+        self.confiar(p)
         self.tocar(p / "src" / "sumar.py")
         self.assertEqual(self.hook(self.entrada(p)).returncode, 2)
         v = self.verificar(p)
@@ -77,6 +78,7 @@ class TestStopEvidencia(EntornoC):
 
     def test_hash_cambiado_en_modo_aviso(self):
         p = self.proyecto(OK, subs=SUBS)
+        self.confiar(p)
         self.tocar(p / "src" / "sumar.py")
         self.assertEqual(self.verificar(p).returncode, 0)
         r = self.hook(self.entrada(p))
@@ -86,6 +88,7 @@ class TestStopEvidencia(EntornoC):
 
     def test_evidencia_con_ok_false_no_vale(self):
         p = self.proyecto(ROTO, subs=SUBS)
+        self.confiar(p)
         self.tocar(p / "src" / "sumar.py")
         self.tocar(p / "src" / "saludar" / "hola.py")
         self.assertEqual(self.verificar(p).returncode, 1)
@@ -110,6 +113,66 @@ class TestStopEvidencia(EntornoC):
         r = self.hook(self.entrada(p), env=env)
         self.assertEqual((r.returncode, r.stdout), (0, ""), r.stderr)
         self.assertIn("sin-pyyaml", self.bitacora())
+
+    # ------------------------------------------------------------ a prueba de fallos propios
+
+    def assert_sale_0_con_error(self, r, tipo):
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertRegex(self.bitacora(), rf"stop-evidencia\s+\|.*\| error {tipo}")
+
+    def test_mecanismo_yml_que_es_una_lista_sale_0(self):
+        p = self.proyecto(OK, subs=SUBS)
+        (p / ".claude" / "mecanismo.yml").write_text("- tipo: mcp\n- puerta: bloqueo\n")
+        self.tocar(p / "src" / "sumar.py")
+        r = self.hook(self.entrada(p))
+        self.assertEqual(r.stdout, "")
+        self.assert_sale_0_con_error(r, "ConfInvalida")
+
+    def test_error_fuera_de_la_lectura_del_yml_sale_0(self):
+        """Un fallo después de leer la config (aquí, `globs: 5`) también queda dentro del try."""
+        p = self.proyecto(OK, subs=SUBS)
+        (p / ".claude" / "mapa-funciones.yml").write_text("funciones:\n  - id: sumar\n    globs: 5\n    test: x\n")
+        self.tocar(p / "src" / "sumar.py")
+        self.assert_sale_0_con_error(self.hook(self.entrada(p)), "TypeError")
+
+    def evidencia_a_mano(self, p, texto):
+        d = p / ".claude" / "evidencia"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "20990101-000000-000000.json").write_text(texto)
+
+    def test_evidencia_con_huellas_o_funciones_que_no_son_mapping_se_ignora(self):
+        p = self.proyecto(OK, subs=SUBS)
+        self.tocar(p / "src" / "sumar.py")
+        for ev in ({"version": 1, "huellas": [], "funciones": []},
+                   {"version": 1, "huellas": ["src/sumar.py"], "funciones": ["sumar"]},
+                   {"version": 1, "huellas": {"src/sumar.py": "x"}, "funciones": ["sumar", 3]}):
+            self.evidencia_a_mano(p, json.dumps(ev))
+            r = self.hook(self.entrada(p))
+            self.assertNotIn("Traceback", r.stderr)
+            self.assert_aviso(r)   # sigue avisando: esa evidencia no vale
+
+    def test_evidencia_json_corrupto_sale_0_y_avisa(self):
+        p = self.proyecto(OK, subs=SUBS)
+        self.tocar(p / "src" / "sumar.py")
+        self.evidencia_a_mano(p, '{"version": 1, "huellas": {"src/sum')
+        r = self.hook(self.entrada(p))
+        self.assertNotIn("Traceback", r.stderr)
+        self.assert_aviso(r)
+
+    def test_evidencia_no_confiada_no_vale(self):
+        """verificar sin `mecanismo confiar` deja evidencia ok: false con huellas: no es vigente."""
+        p = self.proyecto(OK, subs=SUBS)
+        self.puerta(p, "bloqueo")
+        self.tocar(p / "src" / "sumar.py")
+        v = self.verificar(p)
+        self.assertEqual(v.returncode, 1, v.stdout + v.stderr)
+        ev = self.ultima_evidencia(p)
+        self.assertEqual(ev["funciones"][0]["resumen"], "configuración no confiada: corre `mecanismo confiar`")
+        self.assertIn("src/sumar.py", ev["huellas"])   # misma huella que el archivo actual...
+        r = self.hook(self.entrada(p))
+        self.assertEqual(r.returncode, 2)               # ...y aun así no cuenta
+        self.assertIn(CMD_SUMAR, r.stderr)
 
     def test_no_verifica_nunca(self):
         """El hook no arranca el servidor ni escribe evidencia: solo lee."""

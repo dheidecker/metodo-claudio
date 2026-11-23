@@ -25,20 +25,59 @@ EVIDENCIA = Path(".claude/evidencia")
 
 # ---------------------------------------------------------------- configuración
 
-def leer_conf(raiz: Path) -> dict | None:
-    """mecanismo.yml o None si el proyecto no lo tiene. Lanza comun.SinPyYAML."""
-    p = Path(raiz) / CONF
+class ConfInvalida(ValueError):
+    """mecanismo.yml o mapa-funciones.yml no se puede leer como lo pide el contrato (§6)."""
+
+
+def leer_bytes(p: Path) -> bytes | None:
+    """Bytes del archivo, o None si no existe. `verificar` parsea y hashea estos mismos bytes,
+    para que lo que se confió (lib.evidencia.confianza) sea exactamente lo que se ejecuta."""
+    p = Path(p)
     if not p.is_file():
         return None
-    return comun.leer_yaml(p) or {}
+    return p.read_bytes()
+
+
+def _yaml(datos: bytes, nombre: Path):
+    try:
+        import yaml  # noqa: PLC0415
+    except ImportError as e:
+        raise comun.SinPyYAML(str(e)) from e
+    try:
+        return yaml.safe_load(datos)
+    except yaml.YAMLError as e:
+        raise ConfInvalida(f"{nombre}: YAML inválido ({type(e).__name__})") from None
+
+
+def conf_de(datos: bytes | None) -> dict | None:
+    """mecanismo.yml ya leído → dict (None si el archivo no existe). Lanza SinPyYAML o ConfInvalida."""
+    if datos is None:
+        return None
+    d = _yaml(datos, CONF) or {}
+    if not isinstance(d, dict):
+        raise ConfInvalida(f"{CONF} no es un mapping (es {type(d).__name__})")
+    return d
+
+
+def mapa_de(datos: bytes | None) -> list[dict]:
+    if datos is None:
+        return []
+    d = _yaml(datos, MAPA) or {}
+    if not isinstance(d, dict):
+        raise ConfInvalida(f"{MAPA} no es un mapping (es {type(d).__name__})")
+    fs = d.get("funciones") or []
+    if not isinstance(fs, list):
+        raise ConfInvalida(f"{MAPA}: `funciones` no es una lista")
+    return [f for f in fs if isinstance(f, dict) and f.get("id")]
+
+
+def leer_conf(raiz: Path) -> dict | None:
+    """mecanismo.yml o None si el proyecto no lo tiene. Lanza comun.SinPyYAML o ConfInvalida."""
+    return conf_de(leer_bytes(Path(raiz) / CONF))
 
 
 def leer_mapa(raiz: Path) -> list[dict]:
-    p = Path(raiz) / MAPA
-    if not p.is_file():
-        return []
-    d = comun.leer_yaml(p) or {}
-    return [f for f in (d.get("funciones") or []) if isinstance(f, dict) and f.get("id")]
+    return mapa_de(leer_bytes(Path(raiz) / MAPA))
 
 
 def via(funcion: dict) -> str:
@@ -111,7 +150,9 @@ def evidencias(raiz: Path) -> list[dict]:
             e = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if isinstance(e, dict) and e.get("version") == 1:
+        # una evidencia con forma rara (escrita a mano, cortada) se ignora: no tumba al hook
+        if (isinstance(e, dict) and e.get("version") == 1 and isinstance(e.get("huellas"), dict)
+                and isinstance(e.get("funciones"), list)):
             out.append(e)
     return out
 
@@ -123,7 +164,7 @@ def vigente(rel: str, sha: str, fid: str, evs: list[dict]) -> bool:
         if (e.get("huellas") or {}).get(rel) != sha:
             continue
         for f in e.get("funciones") or []:
-            if f.get("id") == fid:
+            if isinstance(f, dict) and f.get("id") == fid:
                 return f.get("ok") is True
     return False
 
