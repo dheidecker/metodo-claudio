@@ -142,3 +142,8 @@ for EV in PermissionRequest PermissionDenied Notification; do
   FILTRO="$FILTRO .hooks.$EV = (((.hooks.$EV // []) | sin_canario) + [$CANARIO]) |"
 done
 echo "  jq '${FILTRO% |}' ~/.claude/settings.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json"
+echo
+echo "  juez de permisos (opcional): un agente decide los deploy de Cloud Run y los rm -rf en vez del diálogo (CONTRATO §12)."
+JUEZ='{"matcher": "Bash", "hooks": [{"type": "command", "command": "mecanismo hook juez-permisos", "timeout": 90}]}'
+echo "  jq '.hooks.PermissionRequest = (((.hooks.PermissionRequest // []) | map(select([.hooks[]?.command // \"\"] | any(test(\"juez-permisos\")) | not))) + [$JUEZ])' ~/.claude/settings.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json"
+echo "  (las reglas ask de gcloud run deploy, gcloud builds submit y rm -rf se mantienen: son las que abren el diálogo que el juez intercepta; si el juez falla o no está, vuelve el diálogo de siempre)"

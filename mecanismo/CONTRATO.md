@@ -256,3 +256,48 @@ Mandan sobre lo anterior donde choquen.
   mecanismo con datos, no el calendario). `contenido: {archivo: .claude/mecanismo.yml, diff}`.
 - **Ids estables**: una propuesta nueva cuyo grupo coincide en significado con una existente actualiza la
   existente en vez de crear otra (la fusión recibe los resúmenes de las propuestas vigentes).
+
+## 12. Juez de permisos (frente F, hook `PermissionRequest`)
+
+Las reglas `ask` de deploy y `rm -rf` **se mantienen**: abren el diálogo, y el hook decide antes de que se
+muestre. Si `mecanismo` no está o el juez falla, vuelve el diálogo humano (fail-safe).
+
+- **Piezas.** `hooks/juez-permisos` (python3) → `lib/juez/hook.py:main(t0)`; `lib/juez/{reglas,contexto,
+  llamada,auditoria,cli}.py`; `prompts/juez.md` + `juez.schema.json`. CLI: `mecanismo juez [--ultimas N]
+  [--negadas] [--json]` (`lib.juez.cli:main(argv)`). Snippet (lo imprime `instalar.sh`, lo aplica Derek):
+  `PermissionRequest`, matcher `Bash`, `mecanismo hook juez-permisos`, timeout 90.
+- **Entrada** (stdin): `{hook_event_name, tool_name, tool_input.command, cwd, session_id, transcript_path,
+  permission_suggestions?}`.
+- **Salida.** Permitir: `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}},
+  "systemMessage":"juez: permitido — <motivo>"}`. Negar: `decision: {"behavior":"deny","interrupt":false,
+  "message":"Juez de permisos: <motivo>. Si es correcto, explica por qué o pídeselo a la persona."}` y
+  `systemMessage: "juez: negado — <motivo>"`. **Sin salida y exit 0** = no decide (diálogo normal). Nunca exit 2.
+- **Guardas.** `MECANISMO_JUEZ_ANIDADO=1` → exit 0 sin salida (lo pone el propio juez en su `claude -p`, que
+  además corre con `--setting-sources project` en `estado_dir()/vacio`, o `--bare` con API key, y `--tools ""`).
+  `tool_name != Bash` → sin salida.
+- **Qué juzga.** Familias de `lib/permisos/familias` presentes en **cualquier** subcomando. Por defecto
+  `gcloud run deploy`, `gcloud builds submit`, `rm -rf`; se cambia con `estado_dir()/juez.yml` (`familias: [...]`;
+  PyYAML solo si el archivo existe). Si además hay otra irreversible o sensible **no** configurada
+  (`rm -rf build && git push`), no decide (`silencio fuera-de-juez <familia>`): un allow aprobaría el comando entero.
+- **Reglas de `rm -rf`** (deterministas, < 300 ms, antes del modelo; cada objetivo resuelto contra el `cwd`,
+  siguiendo los `cd` del propio comando, con `~`/`$HOME` expandidos, en forma léxica y `realpath`, gana la peor):
+  NIEGA variable o sustitución sin expandir, glob en `/` o `$HOME`, `/`, `$HOME`, `~/.claude` (y `CLAUDE_HOME`) o
+  dentro, cualquier `.git`, la raíz del proyecto (`comun.raiz_proyecto(cwd)`) o un ancestro, un glob `*` en la
+  raíz, y todo lo de fuera del proyecto que no esté **estrictamente** bajo `/tmp`. PERMITE si todos los objetivos
+  son efímeros dentro del proyecto (algún componente en `build dist node_modules __pycache__ .cache tmp
+  .pytest_cache coverage target .next`) o están bajo `/tmp`, y el resto del comando es `cd` o trivial. Lo demás,
+  al modelo.
+- **Juez modelo** (siempre para los deploy): Sonnet, `--json-schema` `{decision: permitir|negar, motivo ≤200,
+  riesgo: bajo|medio|alto}`, `--max-budget-usd 0.10`, timeout 45 s (`MECANISMO_JUEZ_TIMEOUT`,
+  `MECANISMO_MODELO_JUEZ` para tests). Contexto: comando, cwd, familias, nota de las reglas, rama, `git status
+  --short` (≤30 líneas), 5 asuntos de commit, 5 últimos prompts humanos y el último texto del asistente.
+  **Todo** pasa por `contexto.redactar` (= `comun.redactar` más valores de `--set-env-vars`/`--set-secrets`/…,
+  `*PASS*|*SECRET*|*TOKEN*|*KEY*=valor` y `--*password*|token|secret valor`) **antes** de cortar.
+- **Fallos** (timeout, sin `claude`, JSON inválido o fuera del esquema, config inválida, sin PyYAML con
+  `juez.yml`, excepción): exit 0 sin salida, `error <tipo>` en la bitácora (`timeout`, `sin-claude`,
+  `json-invalido`, `modelo`, `salida-vacia`, `config-invalida`, `sin-pyyaml`, `excepcion <Clase>`).
+- **Bitácora** (amplía §7, hook `juez-permisos`): `PERMITE <familia> regla|modelo`, `NIEGA <familia> <motivo
+  corto>`, `silencio fuera-de-juez <familia>`, `error <tipo>`. `<familia>` une varias con `+`.
+- **Auditoría**: una línea JSON por decisión en `estado_dir()/juez/AAAA-MM.jsonl`:
+  `{ts, proyecto, cwd, comando (redactado), familia, via: regla|modelo, decision: permitir|negar, motivo,
+  riesgo, duracion_ms, costo_usd?}`. `duracion_ms` cuenta desde que arranca el proceso del hook.
