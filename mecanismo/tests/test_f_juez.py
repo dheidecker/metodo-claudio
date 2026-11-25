@@ -77,9 +77,11 @@ class Base(unittest.TestCase):
 
 class TestReglasRm(Base):
     NIEGA = {
-        "rm -rf $X": "variable sin expandir",
-        "rm -rf ${X}/build": "variable sin expandir",
-        "rm -rf build/$(date)": "variable sin expandir",
+        "rm -rf $X/*": "borraría la raíz",
+        'rm -rf "${X}/"': "borraría la raíz",
+        "rm -rf ~/otra": "primer nivel de $HOME",
+        "rm -rf ~/.config": "primer nivel de $HOME",
+        "rm -rf ~/.ssh/claves/viejas": "configuración de $HOME",
         "rm -rf /*": "glob en la raíz",
         "rm -rf ~/*": "glob en $HOME",
         "rm -rf $HOME/*": "glob en $HOME",
@@ -98,7 +100,6 @@ class TestReglasRm(Base):
         "rm -rf ../../..": "ancestro del proyecto",
         "rm -rf ../..": "borra $HOME",
         "rm -rf /srv/otro": "fuera del proyecto",
-        "rm -rf ../vecino": "fuera del proyecto",
         "\\rm -fr /opt/app": "fuera del proyecto",
         "rm -rf /tmp": "fuera del proyecto",
         "rm -rf /tmp/*": "fuera del proyecto",
@@ -109,11 +110,12 @@ class TestReglasRm(Base):
                "rm -rf coverage target .next", "rm -rf src/__pycache__", "rm -rf build/*", "rm -rf ./build/",
                "\\rm -fr build", "/bin/rm build -rf", "sudo rm --recursive --force dist",
                "cd build && rm -rf x", "rm -rf /tmp/algo", "rm -rf /tmp/a/*", 'rm -rf "build" 2>/dev/null',
-               "rm -rf build; echo listo"]
+               "rm -rf build; echo listo", "T=$(mktemp -d) && echo x > $T/a; rm -rf $T",
+               'D="$(mktemp -d)"; rm -rf "$D"/sub', "rm -rf ../vecino/node_modules", "rm -rf /var/tmp/demo", "rm -rf ~/.cache/pip"]
 
     def test_niega(self):
         for cmd, motivo in self.NIEGA.items():
-            if motivo is None or (cmd == "rm -rf ../vecino" and str(self.tmp).startswith("/tmp/")):
+            if motivo is None:
                 continue
             with self.subTest(cmd=cmd):
                 r = self.hook(cmd)
@@ -136,17 +138,22 @@ class TestReglasRm(Base):
         self.assertTrue(all(l == "PERMITE rm -rf regla" for l in self.bitacora()), self.bitacora())
 
     def test_lo_demas_va_al_modelo(self):
-        for cmd in ("rm -rf src", "rm -rf vendor/bin", "rm -rf build && curl -s x", "rm -rf src/*.log",
-                    "find . -name x | xargs rm -rf"):
+        # Antes se negaban en seco: variables sin expandir y rutas de otros repos de $HOME. Ahora decide
+        # el modelo con la conversación delante (CONTRATO §14).
+        cmds = ("rm -rf src", "rm -rf vendor/bin", "rm -rf build && curl -s x", "rm -rf src/*.log",
+                "find . -name x | xargs rm -rf", "rm -rf $X", "rm -rf ${X}/build", "rm -rf build/$(date)",
+                "rm -rf ../vecino", "cd ../vecino/site && rm -rf vendor", "X=$(mktemp -p ~) && rm -rf $X",
+                "T=$(mktemp -d) && T=~/trabajo/proy/src && rm -rf $T", "T=$(mktemp -d); for T in a b; do rm -rf $T; done")
+        for cmd in cmds:
             with self.subTest(cmd=cmd):
                 r = self.hook(cmd)
                 self.assertEqual(self.decision(r), {"behavior": "allow"}, r.stdout)
-        self.assertEqual(len(self.fake_log()), 5)
+        self.assertEqual(len(self.fake_log()), len(cmds))
         self.assertTrue(all(e["via"] == "modelo" for e in self.auditoria()))
 
     def test_reglas_en_menos_de_300_ms(self):
         tiempos = []
-        for cmd in ("rm -rf build", "rm -rf /srv/otro", "rm -rf $X", "cd build && rm -rf x"):
+        for cmd in ("rm -rf build", "rm -rf /srv/otro", "rm -rf $X/*", "cd build && rm -rf x"):
             r = self.hook(cmd)
             self.assertIsNotNone(r.json)
             tiempos.append(r.ms)
@@ -189,7 +196,7 @@ class TestJuezModelo(Base):
         log = self.fake_log()
         self.assertEqual(len(log), 1)
         self.assertEqual((log[0]["modelo"], log[0]["tope"], log[0]["tools"], log[0]["anidado"]),
-                         ("sonnet", 0.10, "", "1"))
+                         ("sonnet", 0.30, "", "1"))
         self.assertEqual(log[0]["setting_sources"], "project")
         self.assertEqual(log[0]["cwd"], str(self.tmp / "mh" / "vacio"))
         e = json.loads((self.tmp / "entrada.json").read_text())
@@ -200,6 +207,27 @@ class TestJuezModelo(Base):
         self.assertEqual(e["git"]["commits"], ["feat: primer commit"])
         self.assertEqual(e["familias"], ["gcloud run deploy"])
         self.assertIn("PERMITE gcloud run deploy modelo", self.bitacora())
+
+    def test_respuestas_a_preguntas_cuentan_como_humanas(self):
+        t = self.tmp / "pregunta.jsonl"
+        preg = "El juez bloqueó el push. ¿Autorizas mergear el PR #4 y correr la migración?"
+        filas = [
+            {"type": "user", "origin": {"kind": "human"}, "message": {"role": "user", "content": "subamos a produccion"}},
+            {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "q", "name": "AskUserQuestion",
+                                                          "input": {"questions": [{"question": preg}]}}]}},
+            {"type": "user", "toolUseResult": {"questions": [{"question": preg}], "answers": {preg: "Sí, los cuatro"},
+                                               "annotations": {preg: {"notes": "y avisa al terminar"}}},
+             "message": {"content": [{"type": "tool_result", "tool_use_id": "q", "content": "answered"}]}},
+            # la de un subagente no cuenta
+            {"type": "user", "isSidechain": True, "toolUseResult": {"answers": {"x": "sí a todo"}},
+             "message": {"content": [{"type": "tool_result", "tool_use_id": "z", "content": "x"}]}},
+        ]
+        t.write_text("\n".join(json.dumps(f) for f in filas) + "\n")
+        ps = contexto.transcript(str(t))["prompts_humanos"]
+        self.assertEqual(ps[0], "subamos a produccion")
+        self.assertEqual(len(ps), 2)
+        self.assertTrue(ps[1].startswith("Respondió «Sí, los cuatro» (nota: y avisa al terminar) a la pregunta"), ps[1])
+        self.assertIn("PR #4", ps[1])
 
     def test_deploy_negado(self):
         r = self.hook(self.DEPLOY + " && gcloud builds submit --tag x .", transcript=self.transcript(),
@@ -222,7 +250,9 @@ class TestJuezModelo(Base):
             with self.subTest(linea=linea, env=env):
                 r = self.hook(self.DEPLOY, **env)
                 self.assertEqual(r.stdout, "")
-                self.assertEqual(self.bitacora()[-1], linea)
+                self.assertTrue(self.bitacora()[-1].startswith(linea), self.bitacora())
+                if linea == "error json-invalido":       # un fallo suelto se reintenta una vez
+                    self.assertTrue(self.bitacora()[-2].startswith("reintento json-invalido"), self.bitacora())
         self.assertEqual(self.auditoria(), [])
 
     def test_timeout_no_espera_al_modelo(self):
@@ -285,14 +315,23 @@ class TestGuardas(Base):
 
     def test_no_bash_y_no_juzgados(self):
         self.assertEqual(self.hook("rm -rf /", tool="Write").stdout, "")
-        for cmd in ("ls -la", "kubectl apply -f x.yml", 'echo "rm -rf /"', "rm -f x", "npm run deploy",
+        for cmd in ("ls -la", "kubectl get pods", 'echo "rm -rf /"', "rm -f x", "npm run build",
                     "gcloud run services list", 'git commit -m "no hagas git push"'):
             with self.subTest(cmd=cmd):
                 self.assertEqual(self.hook(cmd).stdout, "")
         self.assertEqual(self.bitacora(), [])
         self.assertEqual(self.fake_log(), [])
 
+    def test_por_defecto_juzga_todas_las_irreversibles(self):
+        for cmd in ("php artisan migrate --force", "gh pr merge 4 --squash", "bq query 'select 1'",
+                    "rm -rf build && kubectl apply -f x.yml"):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(self.decision(self.hook(cmd)), {"behavior": "allow"})
+                self.assertEqual(self.auditoria()[-1]["via"], "modelo")
+
     def test_otra_irreversible_vuelve_al_dialogo(self):
+        (self.tmp / "mh").mkdir(exist_ok=True)
+        (self.tmp / "mh" / "juez.yml").write_text("familias: [rm -rf]\n")
         r = self.hook("rm -rf build && kubectl apply -f x.yml")
         self.assertEqual(r.stdout, "")
         self.assertEqual(self.bitacora(), ["silencio fuera-de-juez kubectl apply/delete"])
@@ -307,7 +346,7 @@ class TestGuardas(Base):
         self.assertEqual(self.fake_log()[0]["tarea"], "juez")
         (self.tmp / "mh" / "juez.yml").write_text("familias: rm -rf\n")
         self.assertEqual(self.hook("rm -rf build").stdout, "")
-        self.assertEqual(self.bitacora()[-1], "error config-invalida")
+        self.assertTrue(self.bitacora()[-1].startswith("error config-invalida"), self.bitacora())
 
     def test_sin_pyyaml(self):
         (self.tmp / "mh").mkdir(exist_ok=True)

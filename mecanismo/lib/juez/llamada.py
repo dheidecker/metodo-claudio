@@ -1,4 +1,4 @@
-"""La llamada al juez modelo: `claude -p` con Sonnet, esquema JSON, tope 0,10 USD y 45 s.
+"""La llamada al juez modelo: `claude -p` con Sonnet, esquema JSON, tope 0,30 USD y 45 s.
 
 Imita los flags de lib.recolector.modelo (y reutiliza sus ayudantes de salida y redacción), pero no
 su `llamar()`: el juez lleva su propio modelo, tope y timeout, y sobre todo MECANISMO_JUEZ_ANIDADO=1
@@ -14,7 +14,7 @@ from lib import comun
 from lib.recolector import modelo as M
 
 MODELO = "sonnet"
-TOPE_USD = 0.10
+TOPE_USD = 0.30           # 0,10 se quedaba corto con comandos largos: «error modelo» y volvía el diálogo
 TIMEOUT_S = 45
 DECISIONES = ("permitir", "negar")
 RIESGOS = ("bajo", "medio", "alto")

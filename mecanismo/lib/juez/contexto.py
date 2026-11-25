@@ -100,6 +100,24 @@ def _prompt_sin_origen(e: dict) -> bool:
     return bool(t) and not t.startswith("<")
 
 
+def _respuesta_a_pregunta(e: dict) -> str | None:
+    """Las respuestas de la persona a un AskUserQuestion: son decisiones suyas, aunque lleguen como
+    tool_result (`toolUseResult.answers` = {pregunta: respuesta}, `annotations` = {pregunta: {notes}})."""
+    if e.get("type") != "user" or e.get("isSidechain"):
+        return None
+    r = e.get("toolUseResult")
+    if not isinstance(r, dict) or not isinstance(r.get("answers"), dict) or not r["answers"]:
+        return None
+    notas = r.get("annotations") if isinstance(r.get("annotations"), dict) else {}
+    partes = []
+    for preg, resp in r["answers"].items():
+        nota = (notas.get(preg) or {}).get("notes") if isinstance(notas.get(preg), dict) else None
+        extra = f" (nota: {nota})" if nota else ""
+        # la respuesta primero: si hay que cortar, se pierde la pregunta, no la decisión
+        partes.append(f"Respondió «{resp}»{extra} a la pregunta del agente: «{str(preg)[:900]}»")
+    return "\n".join(partes)
+
+
 def transcript(path: str | None, n: int = 5) -> dict:
     humanos: collections.deque = collections.deque(maxlen=n)
     sin_origen: collections.deque = collections.deque(maxlen=n)
@@ -108,6 +126,8 @@ def transcript(path: str | None, n: int = 5) -> dict:
         for e in _entradas(Path(path)):
             if comun.es_prompt_humano(e):
                 humanos.append(comun.texto_de(e))
+            elif (resp := _respuesta_a_pregunta(e)) is not None:
+                humanos.append(resp)
             elif _prompt_sin_origen(e):
                 sin_origen.append(comun.texto_de(e))
             elif e.get("type") == "assistant" and not e.get("isSidechain"):
@@ -138,6 +158,9 @@ def push(destinos) -> list[dict]:
         commits = _git(d.dir, "log", "--oneline", f"-{COMMITS_PUSH}", *rango).splitlines()
         total = _git(d.dir, "rev-list", "--count", *rango).strip()
         out.append({
+            "repo": redactar(d.dir),
+            "rama_local": _git(d.dir, "symbolic-ref", "--short", "-q", "HEAD").strip() or None,
+            "commits_que_crea_el_comando": d.commits_antes,
             "remoto": d.remoto, "origen": d.src, "rama_destino": d.dst,
             "rama_remota_existe": base == remota,
             "commits_a_subir": [cortar(c, 200) for c in commits],

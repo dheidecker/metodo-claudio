@@ -37,10 +37,9 @@ class BasePush(Base):
 
 class TestFamiliasPorDefecto(unittest.TestCase):
     def test_por_defecto(self):
-        self.assertEqual(set(reglas.FAMILIAS_POR_DEFECTO),
-                         {"gcloud run deploy", "gcloud builds submit", "rm -rf", "gcloud run jobs execute",
-                          "docker push", "git push"})
-        self.assertTrue(set(reglas.FAMILIAS_POR_DEFECTO) <= F.FAMILIAS_IRREVERSIBLES)
+        self.assertEqual(set(reglas.FAMILIAS_POR_DEFECTO), F.FAMILIAS_IRREVERSIBLES | F.FAMILIAS_SENSIBLES)
+        self.assertTrue({"gcloud run deploy", "rm -rf", "git push", "migrate prod", "gh pr merge", "bq query"}
+                        <= set(reglas.FAMILIAS_POR_DEFECTO))
 
 
 class TestPushNiega(BasePush):
@@ -193,6 +192,16 @@ class TestPushAlModelo(BasePush):
         self.assertEqual([c.split(" ", 1)[1] for c in p["commits_a_subir"]], ["feat: subir a main"])
         self.assertEqual(p["remoto_por_delante"], 0)
 
+    def test_push_tras_cd_y_commit_en_el_mismo_comando(self):
+        # El caso real: el agente está en otro repo (cwd), hace cd al del push y commitea antes de subir.
+        git("checkout", "-q", "main", cwd=self.repo)
+        cmd = f"set -e\ncd {self.repo}\ngit add x\ngit commit -q -m 'fix: algo'\ngit push -q 2>&1 | tail -1"
+        r = self.hook(cmd, cwd=str(self.proy))
+        self.assertEqual(self.decision(r), {"behavior": "allow"})
+        p, = json.loads((self.tmp / "entrada.json").read_text())["push"]
+        self.assertEqual((p["repo"], p["rama_local"], p["rama_destino"]), (str(self.repo), "main", "main"))
+        self.assertEqual(p["commits_que_crea_el_comando"], 1)
+
     def test_negado_por_el_modelo(self):
         d = self.decision(self.hook("git push origin main", FAKE_CLAUDE_JUEZ="negar"))
         self.assertEqual(d["behavior"], "deny")
@@ -237,7 +246,8 @@ class TestJobsYDocker(Base):
         # dos familias del juez: una sola llamada al modelo con las dos
         self.hook("docker push x && " + self.JOB)
         self.assertEqual(self.auditoria()[-1]["familia"], "gcloud run jobs execute+docker push")
-        # una irreversible fuera del juez sigue devolviendo el diálogo
+        # una irreversible fuera de las familias configuradas sigue devolviendo el diálogo
+        (self.tmp / "mh" / "juez.yml").write_text("familias: [docker push, gcloud run jobs execute, rm -rf]\n")
         self.assertEqual(self.hook("docker push x && kubectl apply -f k.yml").stdout, "")
         self.assertEqual(self.bitacora()[-1], "silencio fuera-de-juez kubectl apply/delete")
         self.assertEqual(self.hook("docker push x && npm publish").stdout, "")

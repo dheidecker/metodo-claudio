@@ -207,11 +207,13 @@ su sesión. Para eso están las tareas programadas.
 
 ## 5. Lo irreversible lo decide un juez, no el usuario
 
-`git push`, despliegues, `gcloud run jobs execute`, `docker push`, `rm -rf` y
-migraciones en producción **no se le preguntan al usuario**, ni por diálogo ni
-por chat. Los decide el **juez de permisos** de `mecanismo` (hook
-`PermissionRequest`, `mecanismo/CONTRATO.md` §12): mira lo que el usuario pidió
-hace poco, el comando y el repo, y permite o niega. La confianza sale de
+`git push`, despliegues, merges de PR, `gcloud run jobs execute`, `docker push`,
+`rm -rf`, consultas de `bq` y migraciones en producción **no se le preguntan al
+usuario**, ni por diálogo ni por chat. Los decide el **juez de permisos** de
+`mecanismo` (hook `PermissionRequest`, `mecanismo/CONTRATO.md` §12 y §14): mira
+lo que el usuario pidió hace poco, el comando y el repo, y **permite por
+defecto** lo que se sigue de la tarea encargada; niega solo lo que contradice al
+usuario, es ajeno a la tarea o destruye de más. La confianza sale de
 **verificar después**: cada decisión queda en la auditoría
 (`mecanismo juez --ultimas 20`, `mecanismo juez --negadas`).
 

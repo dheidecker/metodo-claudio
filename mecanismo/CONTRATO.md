@@ -332,3 +332,47 @@ Lo que la persona escribe mientras Claude trabaja no queda como entrada `user`: 
 `{"type": "attachment", "attachment": {"type": "queued_command", "prompt": …, "commandMode": "prompt",
 "origin": {"kind": "human"}}}`. `comun.es_prompt_humano` y `comun.texto_de` los incluyen (solo modo
 `prompt`, no los `!comando`). Sin esto el juez negó un push que la persona había pedido a mitad de turno.
+
+## 14. Juez permisivo por defecto (25-nov)
+
+Pedido por Derek: «aún el juez está siendo mi cuello de botella, debe ser más permisivo». En la
+auditoría del 23 al 25-nov, las 8 negaciones eran trabajo que él había encargado. Cambia §12 así:
+
+- **Criterio del modelo** (`prompts/juez.md`): permite por defecto si el comando es un paso razonable
+  de la tarea encargada o aceptada; no hace falta que se haya nombrado el comando exacto. Niega solo
+  por un motivo concreto:
+  - contradice a Derek u otro objetivo;
+  - ajeno a la tarea;
+  - destrucción desproporcionada e irreversible;
+  - trabajo ajeno a `main`;
+  - inyección.
+
+  Ante la duda en lo reversible (push sin force, Cloud Run, regenerable), permite.
+- **Familias por defecto**: todas las de `FAMILIAS_IRREVERSIBLES | FAMILIAS_SENSIBLES`. Eso añade
+  `migrate prod`, `gh pr merge`, `gh release`, `bq query`, `deploy`, `DROP/TRUNCATE`, `kubectl`,
+  `terraform` y `npm publish`. `juez.yml` sigue acotando; el `silencio fuera-de-juez` solo ocurre
+  con una configuración acotada.
+- **Contexto**: las respuestas a `AskUserQuestion` del hilo principal (`toolUseResult.answers`, con
+  sus `annotations.notes`) entran en `prompts_humanos` como
+  `Respondió «R» (nota: N) a la pregunta del agente: «P»`. Solo en el juez, no en `comun`: el
+  recolector no las necesita. Cada destino de `push` trae:
+  - `repo`: el directorio tras los `cd` del comando, que puede no ser el `cwd`;
+  - `rama_local`;
+  - `commits_que_crea_el_comando`: los `git commit` previos en el mismo comando, que aún no salen
+    en `commits_a_subir`.
+- **Reglas de `rm -rf`**:
+  - Pasan sin modelo `X=$(mktemp …)` sin `-p`/`--tmpdir` y luego `rm -rf $X[/…]`, `/var/tmp/…`, `~/.cache/…`
+    y los efímeros de otro repo bajo `$HOME`. Si la variable se reasigna (`X=…`, `for X in`,
+    `read X`), deja de contar como temporal.
+  - Van al modelo una variable sin expandir y una ruta fuera del proyecto a dos o más niveles bajo
+    `$HOME`.
+  - Se siguen negando:
+    - `$X/` o `$X/*`, que con la variable vacía serían la raíz;
+    - un ancestro de `$HOME`;
+    - una carpeta de primer nivel de `$HOME`;
+    - `~/.algo` y lo que tenga dentro (salvo `~/.cache`);
+    - lo que esté fuera de `$HOME` y de `/tmp` o `/var/tmp`;
+    - lo demás de §12.
+- **Modelo**: el tope pasa de 0,10 a 0,30 USD; con 0,10, las llamadas largas daban `error modelo`
+  y volvía el diálogo. Un fallo suelto (todo salvo `timeout` y `sin-claude`) se reintenta una vez
+  si van menos de 40 s. La bitácora anota `error <tipo> <detalle>` y `reintento …`.

@@ -15,8 +15,9 @@ from pathlib import Path
 
 from lib.permisos import familias as F
 
-FAMILIAS_POR_DEFECTO = ("gcloud run deploy", "gcloud builds submit", "rm -rf", "gcloud run jobs execute",
-                        "docker push", "git push")
+# Todas las irreversibles y sensibles de lib.permisos.familias: cualquiera que abra un diálogo lo decide
+# el juez, no Derek (CONTRATO §14). Se acota con estado_dir()/juez.yml.
+FAMILIAS_POR_DEFECTO = tuple(sorted(F.FAMILIAS_IRREVERSIBLES | F.FAMILIAS_SENSIBLES, key=F._ORDEN.__getitem__))
 EFIMEROS = frozenset({"build", "dist", "node_modules", "__pycache__", ".cache", "tmp", ".pytest_cache",
                       "coverage", "target", ".next"})
 
@@ -28,6 +29,10 @@ _RX_MARCA = re.compile("\x00(\\d+)\x00")
 _RX_VARIABLE = re.compile(r"\$(?:[A-Za-z_{(]|[0-9@*#?!$-])|`")
 _RX_GLOB = re.compile(r"[*?\[]")
 _RX_REDIRECCION = re.compile(r"^\d*(?:>>?|<|&>|>&)")
+_RX_VAR_INICIAL = re.compile(r"^\$\{?([A-Za-z_]\w*)\}?(?:/|$)")
+_RX_VAR_COMPLETA = re.compile(r"\$\{[^}]*\}|\$\([^)]*\)|`[^`]*`|\$[A-Za-z_]\w*|\$[0-9@*#?!$-]")
+_RX_REASIGNA = re.compile(r"(?:^|[\s;(])([A-Za-z_]\w*)\+?=|\bfor\s+([A-Za-z_]\w*)\s+in\b|\bread\s+(?:-\w+\s+)*([A-Za-z_]\w*)")
+_RX_MKTEMP = re.compile(r"^\s*(?:export\s+|local\s+|readonly\s+)?([A-Za-z_]\w*)=[\"']?\$\(\s*mktemp\b([^)]*)\)[\"']?\s*$")
 
 
 @dataclass
@@ -44,6 +49,7 @@ class Destino:
     remoto: str
     src: str
     dst: str
+    commits_antes: int = 0   # `git commit` del mismo comando antes del push: aún no salen en el log
 
 
 @dataclass
@@ -138,7 +144,9 @@ class _Ctx:
         except Exception:
             pass
         self.raices = {os.path.normpath(raiz), os.path.realpath(raiz)}
-        self.tmps = {"/tmp", os.path.realpath("/tmp")}
+        self.tmps = {"/tmp", os.path.realpath("/tmp"), "/var/tmp", os.path.realpath("/var/tmp")}
+        self.homes = {self.home, os.path.realpath(self.home)}
+        self.temporales: set[str] = set()      # variables asignadas con `X=$(mktemp …)` en el comando
 
 
 def _tras_cd(p: Pieza, actual: str | None, home: str) -> tuple[bool, str | None]:
@@ -186,15 +194,39 @@ def _evaluar(p: str, ctx: _Ctx, patron: str | None) -> Veredicto:
             if any(x in EFIMEROS for x in rel):
                 return Veredicto(PERMITE, "efímero dentro del proyecto")
             return Veredicto(MODELO, f"dentro del proyecto, no efímero: {'/'.join(rel)}")
+    for h in ctx.homes:
+        if _dentro(h, p):
+            return Veredicto(NIEGA, f"borra un ancestro de $HOME: {p}")
+        if _dentro(p, h):
+            rel = Path(p).relative_to(h).parts
+            if len(rel) == 1:
+                return Veredicto(NIEGA, f"carpeta de primer nivel de $HOME: {p}")
+            # Otro repo o carpeta del usuario (~/Proyectos/otro/...): lo regenerable pasa, lo demás lo
+            # mira el modelo con la conversación delante. Negar en seco era el cuello de botella.
+            if rel[0] == ".cache":
+                return Veredicto(PERMITE, f"caché de $HOME: {p}")
+            if rel[0].startswith("."):                 # ~/.ssh, ~/.config, ~/.gnupg…: no se regeneran
+                return Veredicto(NIEGA, f"configuración de $HOME: {p}")
+            if any(x in EFIMEROS for x in rel[2:]):
+                return Veredicto(PERMITE, f"efímero fuera del proyecto: {p}")
+            return Veredicto(MODELO, f"fuera del proyecto, dentro de $HOME: {p}")
     if any(_dentro(p, t) for t in ctx.tmps):
-        return Veredicto(PERMITE, "bajo /tmp")
-    return Veredicto(NIEGA, f"fuera del proyecto: {p}")
+        return Veredicto(PERMITE, "temporal (/tmp o /var/tmp)")
+    return Veredicto(NIEGA, f"fuera del proyecto y de $HOME: {p}")
 
 
 def _evaluar_objetivo(tok: str, cwd: str | None, ctx: _Ctx) -> Veredicto:
+    m = _RX_VAR_INICIAL.match(tok)
+    if m and m.group(1) in ctx.temporales and ".." not in tok:
+        return Veredicto(PERMITE, f"temporal de mktemp: {tok}")
     exp = _expandir(tok, ctx.home)
     if exp is None:
-        return Veredicto(NIEGA, f"variable sin expandir en {tok}")
+        # Con las variables vacías, ¿qué borraría? `$X/*` o `$X/` serían la raíz: eso no pasa nunca.
+        resto = _RX_VAR_COMPLETA.sub("", tok)
+        vacio = os.path.normpath(resto) if tok.startswith(("$", "`")) and resto.startswith("/") else None
+        if vacio is not None and (vacio == "/" or re.fullmatch(r"/[*.?]+", vacio)):
+            return Veredicto(NIEGA, f"si {tok} quedara vacía, borraría la raíz")
+        return Veredicto(MODELO, f"variable sin expandir en {tok}")
     if not os.path.isabs(exp) and cwd is None:
         return Veredicto(MODELO, f"cwd desconocido tras un cd: {tok}")
     ruta = os.path.join(cwd or "/", exp)
@@ -234,6 +266,16 @@ def reglas_rm(ps: list[Pieza], cwd: str, raiz: str) -> Veredicto:
         es_cd, actual = _tras_cd(p, actual, ctx.home)
         if es_cd:
             continue
+        mt = _RX_MKTEMP.match(p.cruda)
+        if mt:
+            if not re.search(r"(?:^|\s)(?:-p|--tmpdir)\b", mt.group(2)):   # mktemp -p otra/ no es /tmp
+                ctx.temporales.add(mt.group(1))
+            else:
+                ctx.temporales.discard(mt.group(1))
+            continue
+        # cualquier otra asignación de la variable (X=…, for X in, read X) deja de ser el temporal
+        for v in _RX_REASIGNA.findall(p.cruda):
+            ctx.temporales.discard(next(x for x in v if x))
         if "rm -rf" in p.familias:
             objetivos = _objetivos(p.cruda)
             if not objetivos:
@@ -513,10 +555,13 @@ def reglas_push(ps: list[Pieza], cwd: str) -> Veredicto:
     hay_remote_add = any(re.search(r"(?:^|\s)git\b.*\sremote\s+add\b", p.enmascarada) for p in ps)
     peor = _Peor()
     hubo = False
+    commits = 0
     for p in ps:
         es_cd, actual = _tras_cd(p, actual, home)
         if es_cd:
             continue
+        if F.nombre_generico(p.enmascarada) == "git commit":
+            commits += 1
         if "git push" in p.familias:
             hubo = True
             if len(p.familias) > 1:
@@ -525,6 +570,8 @@ def reglas_push(ps: list[Pieza], cwd: str) -> Veredicto:
             if v.decision == NIEGA:
                 return v
             peor(v.decision, v.motivo)
+            for dst in v.destinos:
+                dst.commits_antes = commits
             peor.destinos += v.destinos
             continue
         if p.familias or not _acompanante_seguro(p):

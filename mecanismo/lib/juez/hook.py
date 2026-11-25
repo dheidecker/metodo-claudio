@@ -103,7 +103,15 @@ def juzgar(d: dict, t0: float) -> int:
     nota = "; ".join(v.motivo for v in vs.values() if v.motivo)
     destinos = vs["git push"].destinos if "git push" in vs else []
     datos = contexto.armar(cmd, cwd, juzgadas, nota, d.get("transcript_path"), destinos)
-    r = llamada.juzgar(datos)
+    try:
+        r = llamada.juzgar(datos)
+    except ErrorJuez as e:
+        # Un fallo suelto del modelo no debe devolverle el diálogo a Derek: un reintento si queda tiempo
+        # (el hook tiene 90 s; cada llamada, 45 como mucho).
+        if e.tipo in ("timeout", "sin-claude") or time.monotonic() - t0 > 40:
+            raise
+        comun.bitacora(HOOK, f"reintento {e}"[:120], proyecto=caso.proyecto)
+        r = llamada.juzgar(datos)
     return caso.decidir(r["decision"], "modelo", r["motivo"], familia, r["riesgo"],
                         {"costo_usd": r["costo_usd"]})
 
@@ -120,7 +128,7 @@ def main(t0: float | None = None) -> int:
     try:
         return juzgar(d, t0)
     except ErrorJuez as e:
-        comun.bitacora(HOOK, f"error {e.tipo}", proyecto=proyecto)
+        comun.bitacora(HOOK, f"error {e}"[:120], proyecto=proyecto)
     except comun.SinPyYAML:
         comun.bitacora(HOOK, "error sin-pyyaml", proyecto=proyecto)
     except Exception as e:  # noqa: BLE001 — un fallo del juez nunca rompe la sesión: vuelve el diálogo
